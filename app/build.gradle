@@ -45,7 +45,7 @@ dependencies {
     runtimeOnly('io.jsonwebtoken:jjwt-orgjson:0.10.5') { }
     implementation files('libs/seald-sdk.aar')
 ////    implementation files('libs/app-debug.aar')
-    implementation files('libs/seald_sdk-release.aar')
+//    implementation files('libs/seald_sdk-release.aar')
 //    implementation files('libs/seald_sdk-debug.aar')
-//    implementation files('libs/seald_sdk_android-latest.aar')
+    implementation files('libs/seald_sdk_android-latest.aar')
 }
