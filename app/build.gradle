@@ -43,9 +43,7 @@ dependencies {
     api 'io.jsonwebtoken:jjwt-api:0.10.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.10.5'
     runtimeOnly('io.jsonwebtoken:jjwt-orgjson:0.10.5') { }
-    implementation files('libs/seald-sdk.aar')
-////    implementation files('libs/app-debug.aar')
-//    implementation files('libs/seald_sdk-release.aar')
-//    implementation files('libs/seald_sdk-debug.aar')
-    implementation files('libs/seald_sdk_android-latest.aar')
+
+    implementation files('libs/seald-sdk-android-47845.aar') // go library
+    implementation files('libs/seald-sdk-android-wrapper-47845.aar') // kotlin wrapper
 }

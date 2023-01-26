@@ -3,23 +3,16 @@ package io.seald.go_sdk_demo_app
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import io.jsonwebtoken.Jwts
-import io.jsonwebtoken.SignatureAlgorithm
-import io.jsonwebtoken.security.Keys
 import io.seald.seald_sdk.SealdSDK
 import java.io.File
-import java.util.*
+
+val JWTSharedSecretId = "00000000-0000-1000-a000-7ea300000019"
+val JWTSharedSecret = "o75u89og9rxc9me54qxaxvdutr2t4t25ozj4m64utwemm0osld0zdb02j7gv8t7x"
+val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
+val apiURL = "https://api-dev.soyouz.seald.io/"
+val appId = "00000000-0000-1000-a000-7ea300000018"
 
 const val TAG = "MainActivity"
-
-enum class JWT_PERMISSION(val perm: Int) {
-    ALL(-1),
-    ANONYMOUS_CREATE_MESSAGE(0),
-    ANONYMOUS_FIND_KEY(1),
-    ANONYMOUS_FIND_SIGCHAIN(2),
-    JOIN_TEAM(3),
-    ADD_CONNECTOR(4),
-}
 
 fun deleteRecursive(fileOrDirectory: File) {
     if (fileOrDirectory.isDirectory()) for (child in fileOrDirectory.listFiles()) deleteRecursive(
@@ -33,28 +26,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val JWTSharedSecretId = "00000000-0000-1000-a000-7ea300000019"
-        val JWTSharedSecret = "o75u89og9rxc9me54qxaxvdutr2t4t25ozj4m64utwemm0osld0zdb02j7gv8t7x"
-
-        val date = Date()
-        val expiryDate = Date(date.time + 2 * 60 * 60 * 1000)
-
-
-        val key = Keys.hmacShaKeyFor(JWTSharedSecret.toByteArray())
-        val signupJWT = Jwts.builder()
-            .setHeaderParam("alg", "HS256")
-            .setHeaderParam("typ", "JWT")
-            .claim("join_team", true)
-            .claim("scopes", JWT_PERMISSION.JOIN_TEAM.perm)
-            .setIssuer(JWTSharedSecretId)
-            .setIssuedAt(date)
-            .setExpiration(expiryDate)
-            .signWith(key, SignatureAlgorithm.HS256)
-            .compact()
-
-        val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
-        val apiURL = "https://api-dev.soyouz.seald.io/"
-        val appId = "00000000-0000-1000-a000-7ea300000018"
+        val jwtBuilder = JWTBuilder(JWTSharedSecretId, JWTSharedSecret)
+        val signupJWT = jwtBuilder.makeJWT(JWTBuilder.JWTPermission.ALL)
 
         val path = this.applicationContext.filesDir.absolutePath
         deleteRecursive(File(path))
@@ -75,7 +48,7 @@ class MainActivity : AppCompatActivity() {
         val groupId = sdk1.createGroup(groupName, groupMembers, groupAdmins)
         sdk1.addGroupMembers(groupId, arrayOf(user3Id), arrayOf(user3Id))
         sdk3.removeGroupMembers(groupId, arrayOf(user2Id))
-        sdk3.setGroupAdmins(groupId,arrayOf<String>(), arrayOf(user1Id))
+        sdk3.setGroupAdmins(groupId, arrayOf<String>(), arrayOf(user1Id))
 
         val recipient = arrayOf(user1Id, user2Id, groupId)
         Log.d(TAG, "recipient ${recipient.joinToString(" ")}")
