@@ -35,22 +35,22 @@ class MainActivity : AppCompatActivity() {
         val sdk2 = SealdSDK(apiURL, appId, "$path/sdk2", databaseEncryptionKeyB64, instanceName = "sdk2", logLevel = -1)
         val sdk3 = SealdSDK(apiURL, appId, "$path/sdk3", databaseEncryptionKeyB64, instanceName = "sdk3", logLevel = -1)
 
-        val user1Id = sdk1.createAccount("deviceName", "displayName", signupJWT)
-        Log.d(TAG, "user1Id: $user1Id")
-        val user2Id = sdk2.createAccount("deviceName", "displayName", signupJWT)
-        Log.d(TAG, "user2Id: $user2Id")
-        val user3Id = sdk3.createAccount("deviceName", "displayName", signupJWT)
-        Log.d(TAG, "user3Id: $user3Id")
+        val user1AccInfo = sdk1.createAccount(signupJWT, "displayName", "deviceName")
+        Log.d(TAG, "user1Id: ${user1AccInfo.userId}")
+        val user2AccInfo = sdk2.createAccount(signupJWT, "displayName", "deviceName")
+        Log.d(TAG, "user2Id: ${user2AccInfo.userId}")
+        val user3AccInfo = sdk3.createAccount(signupJWT, "displayName", "deviceName")
+        Log.d(TAG, "user3Id: ${user3AccInfo.userId}")
 
         val groupName = "AC/DC"
-        val groupMembers = arrayOf(user1Id, user2Id)
-        val groupAdmins = arrayOf(user1Id)
+        val groupMembers = arrayOf(user1AccInfo.userId, user2AccInfo.userId)
+        val groupAdmins = arrayOf(user1AccInfo.userId)
         val groupId = sdk1.createGroup(groupName, groupMembers, groupAdmins)
-        sdk1.addGroupMembers(groupId, arrayOf(user3Id), arrayOf(user3Id))
-        sdk3.removeGroupMembers(groupId, arrayOf(user2Id))
-        sdk3.setGroupAdmins(groupId, arrayOf<String>(), arrayOf(user1Id))
+        sdk1.addGroupMembers(groupId, arrayOf(user3AccInfo.userId), arrayOf(user3AccInfo.userId))
+        sdk3.removeGroupMembers(groupId, arrayOf(user2AccInfo.userId))
+        sdk3.setGroupAdmins(groupId, arrayOf<String>(), arrayOf(user1AccInfo.userId))
 
-        val recipient = arrayOf(user1Id, user2Id, groupId)
+        val recipient = arrayOf(user1AccInfo.userId, user2AccInfo.userId, groupId)
         Log.d(TAG, "recipient ${recipient.joinToString(" ")}")
         val es1SDK1 = sdk1.createEncryptionSession(recipient, true)
         Log.d(TAG, "es1SDK1.sessionId: ${es1SDK1.sessionId}")
@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         val decryptedMessageAfterRenew = es1SDK1AfterRenew.decryptMessage(encryptedMessage)
         Log.d(TAG, "es1SDK1AfterRenew decryptedMessageAfterRenew: $decryptedMessageAfterRenew")
 
-        sdk3.removeGroupMembers(groupId, arrayOf(user1Id, user3Id)) // Delete group
+        sdk3.removeGroupMembers(groupId, arrayOf(user1AccInfo.userId, user3AccInfo.userId)) // Delete group
 
         try {
             sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false)
@@ -91,8 +91,8 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "sdk3 retrieve failed as expected - group deleted")
         }
 
-        es1SDK2.addRecipients(arrayOf(user3Id))
-        es1SDK2.revokeRecipients(arrayOf(user1Id))
+        es1SDK2.addRecipients(arrayOf(user3AccInfo.userId))
+        es1SDK2.revokeRecipients(arrayOf(user1AccInfo.userId))
         // es1 has user2 and user3 as recipients
         try {
             sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, false)
