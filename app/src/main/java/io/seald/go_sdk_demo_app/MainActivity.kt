@@ -127,10 +127,10 @@ class MainActivity : AppCompatActivity() {
         // user1 revokes all other recipients from the session
         es1SDK1.revokeOthers()
 
-        // user2 cannot retrieve the session
+        // user2 cannot retrieve the session anymore
         assertFails { sdk2.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
-        // user1 revoke all. it can no longer retrieve it.
+        // user1 revokes all. It can no longer retrieve it.
         es1SDK1.revokeAll()
         assertFails { sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
