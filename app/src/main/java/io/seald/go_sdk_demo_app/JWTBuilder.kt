@@ -49,7 +49,7 @@ class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
             .setHeaderParam("alg", "HS256")
             .setHeaderParam("typ", "JWT")
             .claim("scopes", JWTPermission.ADD_CONNECTOR)
-            .setClaims(mapOf("connector_add" to mapOf("type" to "AP", "value" to "$customUserId@$appId")))
+            .claim("connector_add", mapOf("type" to "AP", "value" to "$customUserId@$appId"))
             .setIssuer(JWTSharedSecretId)
             .setId(UUID.randomUUID().toString())
             .setIssuedAt(date)
