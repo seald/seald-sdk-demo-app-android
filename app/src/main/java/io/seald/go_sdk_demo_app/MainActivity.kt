@@ -107,8 +107,8 @@ class MainActivity : AppCompatActivity() {
         // As the group was deleted, it can no longer access it.
         try {
             // user3 still have the encryption session in its cache, but we can disable it.
-            val noRetrieve = sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false)
-            assert(noRetrieve == null)
+            sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false)
+            assert(false) // Trigger un-catchable `FATAL EXCEPTION`
         } catch (e: Exception) {
             Log.d(TAG, "sdk3 retrieve failed as expected - group deleted")
         }
@@ -132,7 +132,7 @@ class MainActivity : AppCompatActivity() {
 
         // user2 revoke all other recipient from the session
         es1SDK2.revokeOthers()
-        
+
         // user3 cannot retrieve the session
         try {
             sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false)
@@ -184,7 +184,7 @@ class MainActivity : AppCompatActivity() {
 
         val jwtConnector = connectors.find { connector ->  connector.id !=  validatedConnector.id}
         assert(jwtConnector?.state == io.seald.seald_sdk.ConnectorState.VALIDATED)
-        assert(pendingConnector.type == io.seald.seald_sdk.ConnectorType.AP)
+        assert(pendingConnector.type == io.seald.seald_sdk.ConnectorType.EM)
         assert(jwtConnector?.sealdId == validatedConnector.sealdId)
         assert(jwtConnector?.value == "${customConnectorJWTValue}@${appId}")
 
@@ -213,7 +213,7 @@ class MainActivity : AppCompatActivity() {
 
         // Get sealdId of a user from a connector
         val sealdIds = sdk2.getSealdIdsFromConnectors(arrayOf(io.seald.seald_sdk.ConnectorTypeValue(io.seald.seald_sdk.ConnectorType.AP, "${customConnectorJWTValue}@${appId}")))
-        assert(sealdIds.size == 2)
+        assert(sealdIds.size == 1)
         assert(sealdIds[0] == user1AccountInfo.userId)
 
         // user1 can remove a connector
@@ -235,7 +235,7 @@ class MainActivity : AppCompatActivity() {
         val sdk1Exported = SealdSDK(apiURL, appId, "$path/sdk1Exported", databaseEncryptionKeyB64, instanceName = "sdk1", logLevel = -1)
         sdk1Exported.importIdentity(exportIdentity)
 
-        // SDK with imported identity can decrypt 
+        // SDK with imported identity can decrypt
         val es2SDK1Exported = sdk1Exported.retrieveEncryptionSessionFromMessage(encMessage)
         val clearMessageExportedIdentity = es2SDK1Exported.decryptMessage(encMessage)
         assert(initialString == clearMessageExportedIdentity)
