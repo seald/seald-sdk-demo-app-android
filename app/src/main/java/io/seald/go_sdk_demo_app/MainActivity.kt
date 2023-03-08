@@ -10,10 +10,10 @@ import kotlin.test.assertFails
 // Seald account infos:
 // First step with Seald: https://docs.seald.io/en/sdk/guides/1-quick-start.html
 // Create a team here: https://www.seald.io/create-sdk
-val JWTSharedSecretId = "00000000-0000-1000-a000-7ea300000019"
-val JWTSharedSecret = "o75u89og9rxc9me54qxaxvdutr2t4t25ozj4m64utwemm0osld0zdb02j7gv8t7x"
-val apiURL = "https://api-dev.soyouz.seald.io/"
-val appId = "00000000-0000-1000-a000-7ea300000018"
+val appId = "1e2600a5-417e-4333-93a6-2b196781b0de"
+val apiURL = "https://api.staging-0.seald.io/"
+val JWTSharedSecretId = "32b4e3db-300b-4916-90e6-0020639c3df0"
+val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8csh1xYeLTjTTO"
 
 // The Seald SDK uses a local database that will persist on disk.
 // When instantiating a SealdSDK, it is highly recommended to set a symmetric key to encrypt this database.
