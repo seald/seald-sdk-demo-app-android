@@ -24,8 +24,7 @@ class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
         ADD_CONNECTOR(4),
     }
 
-    fun makeJWT(permission: JWTPermission): String {
-
+    fun signupJWT(): String {
         val date = Date()
         val expiryDate = Date(date.time + 2 * 60 * 60 * 1000)
 
@@ -33,8 +32,26 @@ class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
             .setHeaderParam("alg", "HS256")
             .setHeaderParam("typ", "JWT")
             .claim("join_team", true)
-            .claim("scopes", permission.perm)
+            .claim("scopes", JWTPermission.JOIN_TEAM)
+            .setId(UUID.randomUUID().toString())
             .setIssuer(JWTSharedSecretId)
+            .setIssuedAt(date)
+            .setExpiration(expiryDate)
+            .signWith(JWTSharedSecret, SignatureAlgorithm.HS256)
+            .compact()
+    }
+
+    fun connectorJWT(customUserId: String, appId: String): String {
+        val date = Date()
+        val expiryDate = Date(date.time + 2 * 60 * 60 * 1000)
+
+        return Jwts.builder()
+            .setHeaderParam("alg", "HS256")
+            .setHeaderParam("typ", "JWT")
+            .claim("scopes", JWTPermission.ADD_CONNECTOR)
+            .setClaims(mapOf("connector_add" to mapOf("type" to "AP", "value" to "$customUserId@$appId")))
+            .setIssuer(JWTSharedSecretId)
+            .setId(UUID.randomUUID().toString())
             .setIssuedAt(date)
             .setExpiration(expiryDate)
             .signWith(JWTSharedSecret, SignatureAlgorithm.HS256)
