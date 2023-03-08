@@ -109,9 +109,7 @@ class MainActivity : AppCompatActivity() {
             // user3 still have the encryption session in its cache, but we can disable it.
             sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false)
             assert(false) // Trigger un-catchable `FATAL EXCEPTION`
-        } catch (e: Exception) {
-            Log.d(TAG, "sdk3 retrieve failed as expected - group deleted")
-        }
+        } catch (_: Exception) {}
 
         // user2 add user3 as recipient of the encryption session.
         es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
@@ -222,11 +220,12 @@ class MainActivity : AppCompatActivity() {
         // verify that only one connector left
         val connectorListAfterRevoke = sdk1.listConnectors()
         assert(connectorListAfterRevoke.size == 1)
-        assert(connectorListAfterRevoke[0].value == customConnectorJWTValue)
+        assert(connectorListAfterRevoke[0].value == "${customConnectorJWTValue}@${appId}")
 
         // Create additional data for user1
         val es2SDK1 = sdk1.createEncryptionSession(arrayOf(user1AccountInfo.userId), true)
-        val encMessage = es2SDK1.encryptMessage("trolololo")
+        val anotherMessage = "nobody should read that!"
+        val encMessage = es2SDK1.encryptMessage(anotherMessage)
 
         // user1 can export its identity
         val exportIdentity = sdk1.exportIdentity()
@@ -238,7 +237,7 @@ class MainActivity : AppCompatActivity() {
         // SDK with imported identity can decrypt
         val es2SDK1Exported = sdk1Exported.retrieveEncryptionSessionFromMessage(encMessage)
         val clearMessageExportedIdentity = es2SDK1Exported.decryptMessage(encMessage)
-        assert(initialString == clearMessageExportedIdentity)
+        assert(anotherMessage == clearMessageExportedIdentity)
 
         // user1 can create sub identity
         val subIdentity = sdk1.createSubIdentity("SUB-deviceName")
@@ -253,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         // sub device can decrypt
         val es2SDK1SubDevice = sdk1SubDevice.retrieveEncryptionSessionFromMessage(encMessage, false)
         val clearMessageSubdIdentity = es2SDK1SubDevice.decryptMessage(encMessage)
-        assert(initialString == clearMessageSubdIdentity)
+        assert(anotherMessage == clearMessageSubdIdentity)
 
         sdk1.heartbeat()
 
