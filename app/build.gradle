@@ -45,6 +45,7 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.10.5'
     runtimeOnly('io.jsonwebtoken:jjwt-orgjson:0.10.5') { }
 
-    implementation files('libs/seald-sdk-internals-49527.aar') // go library
-    implementation files('libs/seald-sdk-49527.aar') // kotlin wrapper
+    // Seald SDK
+    implementation files('libs/seald-sdk-internals-49527.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-49527.aar
+    implementation files('libs/seald-sdk-49527.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-49527.aar
 }
