@@ -23,9 +23,11 @@ val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5
 const val TAG = "MainActivity"
 
 fun deleteRecursive(fileOrDirectory: File) {
-    if (fileOrDirectory.isDirectory()) for (child in fileOrDirectory.listFiles()) deleteRecursive(
-        child
-    )
+    if (fileOrDirectory.isDirectory()) {
+        for (child in fileOrDirectory.listFiles()!!) {
+            deleteRecursive(child)
+        }
+    }
     fileOrDirectory.delete()
 }
 

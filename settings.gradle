@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "go-sdk-demo-app"
+rootProject.name = "seald-sdk-demo-app-android"
 include ':app'
