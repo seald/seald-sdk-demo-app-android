@@ -1,4 +1,4 @@
-package io.seald.go_sdk_demo_app
+package io.seald.seald_sdk_demo_app_android
 
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm

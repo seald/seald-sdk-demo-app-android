@@ -1,4 +1,4 @@
-package io.seald.go_sdk_demo_app
+package io.seald.seald_sdk_demo_app_android
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("io.seald.go_sdk_demo_app", appContext.packageName)
+        assertEquals("io.seald.seald_sdk_demo_app_android", appContext.packageName)
     }
 }

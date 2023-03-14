@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'io.seald.go_sdk_demo_app'
+    namespace 'io.seald.seald_sdk_demo_app_android'
     compileSdk 32
 
     defaultConfig {
-        applicationId "io.seald.go_sdk_demo_app"
+        applicationId "io.seald.seald_sdk_demo_app_android"
         minSdk 26
         targetSdk 32
         versionCode 1
