@@ -10,15 +10,15 @@ import kotlin.test.assertFails
 // Seald account infos:
 // First step with Seald: https://docs.seald.io/en/sdk/guides/1-quick-start.html
 // Create a team here: https://www.seald.io/create-sdk
-val appId = "1e2600a5-417e-4333-93a6-2b196781b0de"
-val apiURL = "https://api.staging-0.seald.io/"
-val JWTSharedSecretId = "32b4e3db-300b-4916-90e6-0020639c3df0"
-val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8csh1xYeLTjTTO"
+const val apiURL = "https://api.staging-0.seald.io/"
+const val appId = "1e2600a5-417e-4333-93a6-2b196781b0de"
+const val JWTSharedSecretId = "32b4e3db-300b-4916-90e6-0020639c3df0"
+const val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8csh1xYeLTjTTO"
 
 // The Seald SDK uses a local database that will persist on disk.
 // When instantiating a SealdSDK, it is highly recommended to set a symmetric key to encrypt this database.
 // This demo will use a fixed key. It should be generated at signup, and retrieved from your backend at login.
-val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
+const val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
 
 const val TAG = "MainActivity"
 
