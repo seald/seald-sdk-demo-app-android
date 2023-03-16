@@ -46,6 +46,6 @@ dependencies {
     runtimeOnly('io.jsonwebtoken:jjwt-orgjson:0.10.5') { }
 
     // Seald SDK
-    implementation files('libs/seald-sdk-internals-49527.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-49527.aar
-    implementation files('libs/seald-sdk-49527.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-49527.aar
+    implementation files('libs/seald-sdk-internals-49591.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-49591.aar
+    implementation files('libs/seald-sdk-49591.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-49591.aar
 }
