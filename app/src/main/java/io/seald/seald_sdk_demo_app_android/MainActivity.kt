@@ -6,6 +6,7 @@ import io.seald.seald_sdk.SealdSDK
 import java.io.File
 import java.time.Duration
 import kotlin.test.assertFails
+import kotlin.test.assertTrue
 
 // Seald account infos:
 // First step with Seald: https://docs.seald.io/en/sdk/guides/1-quick-start.html
@@ -89,6 +90,26 @@ class MainActivity : AppCompatActivity() {
         val encryptedMessage = es1SDK1.encryptMessage(initialString)
         val decryptedMessage = es1SDK1.decryptMessage(encryptedMessage)
         assert(initialString == decryptedMessage)
+
+        // Create a test file on disk that we will encrypt/decrypt
+        val filename = "testfile.txt"
+        val fileContent = "File clear data."
+        val clearFile = File(getFilesDir(), "/" + filename)
+        clearFile.writeText(fileContent)
+
+        // encrypt the test file. Resulting file will be write alongside the source file, with `.seald` extension added
+        val encryptedFileURI = es1SDK1.encryptFileFromURI(clearFile.absolutePath)
+
+        // user1 can retrieve the encryptionSession directly from the encrypted file
+        val es1SDK1FromFile = sdk1.retrieveEncryptionSessionFromFile(encryptedFileURI)
+
+        // The retrieved session can decrypt the file.
+        // The decrypted file will be named with the name it has at encryption. Any renaming of the encrypted file will be ignore.
+        // NOTE: In this example, the original file will be overwrite
+        val decryptedFileURI = es1SDK1FromFile.decryptFileFromURI(encryptedFileURI)
+        assertTrue { decryptedFileURI.endsWith(filename) }
+        val decryptedFile = File(decryptedFileURI)
+        assert(fileContent == decryptedFile.readText())
 
         // user1 can retrieve the EncryptionSession from the encrypted message
         val es1SDK1RetrieveFromMess = sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, true)
