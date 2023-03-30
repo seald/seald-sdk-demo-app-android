@@ -133,8 +133,17 @@ class MainActivity : AppCompatActivity() {
         // user3 still has the encryption session in its cache, but we can disable it.
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
+        // Revoking someone who is not in the session does not throw, but the status will be "ko"
+        val respRevokeAgain = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
+        assert(respRevokeAgain.size == 1)
+        assert(user3AccountInfo.userId == respRevokeAgain[0].userId)
+        assert("ko" == respRevokeAgain[0].status)
+
         // user2 adds user3 as recipient of the encryption session.
-        es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
+        val respAdd = es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
+        assert(respAdd.size == 1)
+        assert(user3AccountInfo.deviceId == respAdd[0].userId)
+        assert("ok" == respAdd[0].status)
 
         // user3 can now retrieve it.
         val es1SDK3 = sdk3.retrieveEncryptionSession(es1SDK1.sessionId, false)
@@ -142,7 +151,10 @@ class MainActivity : AppCompatActivity() {
         assert(initialString == decryptedMessageAfterAdd)
 
         // user2 revokes user3 from the encryption session.
-        es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
+        val respRevoke = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
+        assert(respRevoke.size == 1)
+        assert(user3AccountInfo.userId == respRevoke[0].userId)
+        assert("ok" == respRevoke[0].status)
 
         // user3 cannot retrieve the session anymore
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
@@ -154,7 +166,12 @@ class MainActivity : AppCompatActivity() {
         assertFails { sdk2.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
         // user1 revokes all. It can no longer retrieve it.
-        es1SDK1.revokeAll()
+        val respRevokeAll = es1SDK1.revokeAll()
+        assert(respRevokeAll.size == 4) // 3 users and the group
+        respRevokeAll.forEach { el ->
+            assert("ok" == el.status)
+        }
+
         assertFails { sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
         // Create additional data for user1
