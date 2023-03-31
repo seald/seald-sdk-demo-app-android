@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         // Create a test file on disk that we will encrypt/decrypt
         val filename = "testfile.txt"
         val fileContent = "File clear data."
-        val clearFile = File(getFilesDir(), "/" + filename)
+        val clearFile = File(getFilesDir(), "/$filename")
         clearFile.writeText(fileContent)
 
         // encrypt the test file. Resulting file will be write alongside the source file, with `.seald` extension added
@@ -105,9 +105,9 @@ class MainActivity : AppCompatActivity() {
 
         // The retrieved session can decrypt the file.
         // The decrypted file will be named with the name it has at encryption. Any renaming of the encrypted file will be ignore.
-        // NOTE: In this example, the original file will be overwrite
+        // NOTE: In this example, the decrypted file will have `(1)` suffix to avoid overwriting the original clear file.
         val decryptedFileURI = es1SDK1FromFile.decryptFileFromURI(encryptedFileURI)
-        assertTrue { decryptedFileURI.endsWith(filename) }
+        assertTrue { decryptedFileURI.endsWith("testfile (1).txt") }
         val decryptedFile = File(decryptedFileURI)
         assert(fileContent == decryptedFile.readText())
 
@@ -134,15 +134,15 @@ class MainActivity : AppCompatActivity() {
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
         // Revoking someone who is not in the session does not throw, but the status will be "ko"
-        val respRevokeAgain = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
-        assert(respRevokeAgain.size == 1)
-        assert(user3AccountInfo.userId == respRevokeAgain[0].userId)
-        assert("ko" == respRevokeAgain[0].status)
+        val respRevokeBefore = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
+        assert(respRevokeBefore.size == 1)
+        assert(user3AccountInfo.userId == respRevokeBefore[0].userId)
+        assert("ko" == respRevokeBefore[0].status)
 
         // user2 adds user3 as recipient of the encryption session.
         val respAdd = es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
         assert(respAdd.size == 1)
-        assert(user3AccountInfo.deviceId == respAdd[0].userId)
+        assert(user3AccountInfo.deviceId == respAdd[0].userId) // Note that addRecipient return userId instead of deviceId
         assert("ok" == respAdd[0].status)
 
         // user3 can now retrieve it.
@@ -160,7 +160,11 @@ class MainActivity : AppCompatActivity() {
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
         // user1 revokes all other recipients from the session
-        es1SDK1.revokeOthers()
+        val respRevokeOther = es1SDK1.revokeOthers()// revoke user2, group, and user3 even if it's already done for him
+        assert(respRevokeOther.size == 3)
+        assert("ok" == respRevokeOther[0].status)
+        assert("ok" == respRevokeOther[1].status)
+        assert("ok" == respRevokeOther[2].status)
 
         // user2 cannot retrieve the session anymore
         assertFails { sdk2.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
