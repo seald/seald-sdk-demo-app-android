@@ -136,14 +136,12 @@ class MainActivity : AppCompatActivity() {
         // Revoking someone who is not in the session does not throw, but the status will be "ko"
         val respRevokeBefore = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
         assert(respRevokeBefore.size == 1)
-        assert(user3AccountInfo.userId == respRevokeBefore[0].userId)
-        assert("ko" == respRevokeBefore[0].status)
+        assert(respRevokeBefore[user3AccountInfo.userId]?.status == "ko")
 
         // user2 adds user3 as recipient of the encryption session.
         val respAdd = es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
         assert(respAdd.size == 1)
-        assert(user3AccountInfo.deviceId == respAdd[0].userId) // Note that addRecipient return userId instead of deviceId
-        assert("ok" == respAdd[0].status)
+        assert(respAdd[user3AccountInfo.deviceId]?.status == "ok") // Note that addRecipient return userId instead of deviceId
 
         // user3 can now retrieve it.
         val es1SDK3 = sdk3.retrieveEncryptionSession(es1SDK1.sessionId, false)
@@ -153,18 +151,17 @@ class MainActivity : AppCompatActivity() {
         // user2 revokes user3 from the encryption session.
         val respRevoke = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
         assert(respRevoke.size == 1)
-        assert(user3AccountInfo.userId == respRevoke[0].userId)
-        assert("ok" == respRevoke[0].status)
+        assert(respRevoke[user3AccountInfo.userId]?.status == "ok")
 
         // user3 cannot retrieve the session anymore
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
         // user1 revokes all other recipients from the session
         val respRevokeOther = es1SDK1.revokeOthers()// revoke user2, group, and user3 even if it's already done for him
-        assert(respRevokeOther.size == 3)
-        assert("ok" == respRevokeOther[0].status)
-        assert("ok" == respRevokeOther[1].status)
-        assert("ok" == respRevokeOther[2].status)
+        assert(respRevokeOther.size == 3)                                       
+        assert(respRevokeOther[groupId]?.status == "ok")
+        assert(respRevokeOther[user2AccountInfo.userId]?.status == "ok")
+        assert(respRevokeOther[user3AccountInfo.userId]?.status == "ok")
 
         // user2 cannot retrieve the session anymore
         assertFails { sdk2.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
@@ -172,8 +169,8 @@ class MainActivity : AppCompatActivity() {
         // user1 revokes all. It can no longer retrieve it.
         val respRevokeAll = es1SDK1.revokeAll()
         assert(respRevokeAll.size == 4) // 3 users and the group
-        respRevokeAll.forEach { el ->
-            assert("ok" == el.status)
+        respRevokeAll.forEach { entry ->
+            assert("ok" == entry.value.status)
         }
 
         assertFails { sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
