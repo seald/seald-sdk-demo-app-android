@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.8.10'
 }
 
 android {
@@ -37,15 +38,18 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.5.1'
     implementation 'com.google.android.material:material:1.7.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'org.jetbrains.kotlin:kotlin-test' // TODO should be `testImplementation` with proper test suite
+    implementation 'org.jetbrains.kotlin:kotlin-test'
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.4'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
     api 'io.jsonwebtoken:jjwt-api:0.10.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.10.5'
     runtimeOnly('io.jsonwebtoken:jjwt-orgjson:0.10.5') { }
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.0"
+    implementation("com.squareup.okhttp3:okhttp:4.10.0")
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0"
 
     // Seald SDK
-    implementation files('libs/seald-sdk-internals-49591.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-49591.aar
-    implementation files('libs/seald-sdk-49591.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-49591.aar
+    implementation files('libs/seald-sdk-internals.aar')
+    implementation files('libs/seald_sdk-debug.aar')
+//    implementation files('libs/seald-sdk-internals-49591.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-49591.aar
+//    implementation files('libs/seald-sdk-49591.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-49591.aar
 }

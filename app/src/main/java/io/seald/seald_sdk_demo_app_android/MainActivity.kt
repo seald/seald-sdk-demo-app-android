@@ -2,9 +2,11 @@ package io.seald.seald_sdk_demo_app_android
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import io.seald.seald_sdk.SealdSDK
+import io.seald.seald_sdk.*
 import java.io.File
 import java.time.Duration
+import java.util.*
+import javax.crypto.KeyGenerator
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
 
@@ -21,7 +23,10 @@ const val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8
 // This demo will use a fixed key. It should be generated at signup, and retrieved from your backend at login.
 const val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
 
-const val TAG = "MainActivity"
+const val ssksURL = "https://ssks.soyouz.seald.io/"
+const val ssksBackendAppId = "00000000-0000-0000-0000-000000000001"
+const val ssksBackendAppKey = "00000000-0000-0000-0000-000000000002"
+const val ssksTmrChallenge = "aaaaaaaa"
 
 fun deleteRecursive(fileOrDirectory: File) {
     if (fileOrDirectory.isDirectory()) {
@@ -48,6 +53,13 @@ class MainActivity : AppCompatActivity() {
         // JWT documentation: https://docs.seald.io/en/sdk/guides/jwt.html
         // identity documentation: https://docs.seald.io/en/sdk/guides/4-identities.html
         val jwtBuilder = JWTBuilder(JWTSharedSecretId, JWTSharedSecret)
+
+        testSDK(path, jwtBuilder)
+//        testSSKSPassword(path, jwtBuilder)
+//        testSSKSTMR(path, jwtBuilder)
+    }
+
+    fun testSDK(path: String, jwtBuilder: JWTBuilder) {
 
         // let's instantiate 3 SealdSDK. They will correspond to 3 users that will exchange messages.
         val sdk1 = SealdSDK(apiURL, appId, "$path/sdk1", databaseEncryptionKeyB64, instanceName = "User1", logLevel = -1)
@@ -136,12 +148,12 @@ class MainActivity : AppCompatActivity() {
         // Revoking someone who is not in the session does not throw, but the status will be "ko"
         val respRevokeBefore = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
         assert(respRevokeBefore.size == 1)
-        assert(respRevokeBefore[user3AccountInfo.userId]?.status == "ko")
+        respRevokeBefore[user3AccountInfo.userId]?.success?.let { assert(!it) }
 
         // user2 adds user3 as recipient of the encryption session.
         val respAdd = es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
         assert(respAdd.size == 1)
-        assert(respAdd[user3AccountInfo.deviceId]?.status == "ok") // Note that addRecipient return userId instead of deviceId
+        respAdd[user3AccountInfo.deviceId]?.success?.let { assert(it) } // Note that addRecipient return deviceId
 
         // user3 can now retrieve it.
         val es1SDK3 = sdk3.retrieveEncryptionSession(es1SDK1.sessionId, false)
@@ -151,17 +163,17 @@ class MainActivity : AppCompatActivity() {
         // user2 revokes user3 from the encryption session.
         val respRevoke = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
         assert(respRevoke.size == 1)
-        assert(respRevoke[user3AccountInfo.userId]?.status == "ok")
+        respRevoke[user3AccountInfo.userId]?.success?.let { assert(it) }
 
         // user3 cannot retrieve the session anymore
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
         // user1 revokes all other recipients from the session
         val respRevokeOther = es1SDK1.revokeOthers()// revoke user2, group, and user3 even if it's already done for him
-        assert(respRevokeOther.size == 3)                                       
-        assert(respRevokeOther[groupId]?.status == "ok")
-        assert(respRevokeOther[user2AccountInfo.userId]?.status == "ok")
-        assert(respRevokeOther[user3AccountInfo.userId]?.status == "ok")
+        assert(respRevokeOther.size == 3)
+        respRevokeOther[groupId]?.success?.let { assert(it) }
+        respRevokeOther[user2AccountInfo.userId]?.success?.let { assert(it) }
+        respRevokeOther[user3AccountInfo.userId]?.success?.let { assert(it) }
 
         // user2 cannot retrieve the session anymore
         assertFails { sdk2.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
@@ -170,7 +182,7 @@ class MainActivity : AppCompatActivity() {
         val respRevokeAll = es1SDK1.revokeAll()
         assert(respRevokeAll.size == 4) // 3 users and the group
         respRevokeAll.forEach { entry ->
-            assert("ok" == entry.value.status)
+            assert(entry.value.success)
         }
 
         assertFails { sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
@@ -261,4 +273,105 @@ class MainActivity : AppCompatActivity() {
         sdk2.close()
         sdk3.close()
     }
+
+    fun testSSKSPassword(path: String, jwtBuilder: JWTBuilder) {
+        val thread = Thread {
+            try {
+                // Test with standard password
+                val userIdPassword = "user-${randomString(11)}"
+                val userPassword = userIdPassword
+                val dummyIdentity = userIdPassword.toByteArray()
+                val ssksPlugin = SealdSSKSPasswordPlugin(ssksURL, appId)
+
+                ssksPlugin.saveIdentityFromPassword(userIdPassword, userPassword, dummyIdentity)
+                val retrieveIdentity = ssksPlugin.retrieveIdentityFromPassword(userIdPassword, userPassword)
+                assert(retrieveIdentity.contentEquals(dummyIdentity))
+
+                val newPassword = "newPassword"
+                ssksPlugin.changeIdentityPassword(userIdPassword, userPassword, newPassword)
+                val retrieveNewPassword = ssksPlugin.retrieveIdentityFromPassword(userIdPassword, newPassword)
+                assert(retrieveNewPassword.contentEquals(dummyIdentity))
+
+                // Test with raw keys
+                val userIdRawKeys = "user-${randomString(11)}"
+                val keyGenerator = KeyGenerator.getInstance("AES")
+                keyGenerator.init(64 * 8) // Key length in bits
+
+                val rawEncryptionKey = keyGenerator.generateKey().encoded
+                val rawStorageKey = randomString(32)
+
+                ssksPlugin.saveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey, dummyIdentity)
+                val retrieveRawKeys = ssksPlugin.retrieveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey)
+                assert(retrieveRawKeys.contentEquals(dummyIdentity))
+
+                ssksPlugin.saveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey, ByteArray(0))
+
+                val exception = assertFails { ssksPlugin.retrieveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey) }
+                assert(exception.localizedMessage == "ssks password cannot find identity with this id/password combination")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        thread.start()
+
+    }
+
+    fun testSSKSTMR(path: String, jwtBuilder: JWTBuilder) {
+        val thread = Thread {
+            try {
+                val keyGenerator = KeyGenerator.getInstance("AES")
+                keyGenerator.init(64 * 8) // Key length in bits
+                val tmrSymKey = keyGenerator.generateKey()
+
+                val yourCompagnyDummyBackend = SSKSbackend(ssksURL, ssksBackendAppId, ssksBackendAppKey)
+
+
+                // We will be using dummy value for demo.
+                val userId = "user-${randomString(11)}" // should be: AccountInfo.userId
+                val dummyIdentity = userId.toByteArray() // should be: sdk.exportIdentity()
+
+                val userEM = "email-${randomString(15)}@test.com"
+                val authFactor = AuthFactor(AuthFactorType.EM, userEM)
+                val chall = yourCompagnyDummyBackend.ChallengeSend(userId, authFactor,
+                    createUser = true,
+                    forceAuth = false
+                )
+
+                val ssksPlugin = SealdSSKSTmrPlugin(ssksURL, appId)
+                ssksPlugin.saveIdentity(chall.sessionId, authFactor = authFactor, rawTMRSymKey = tmrSymKey.encoded, identity = dummyIdentity, challenge = "")
+                val retrieveNotAuth = ssksPlugin.retrieveIdentity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = tmrSymKey.encoded)
+                assert(retrieveNotAuth.shouldRenewKey)
+                assert(retrieveNotAuth.identity.contentEquals(dummyIdentity))
+
+                // If initial key has been saved without being fully authenticate, you should renew the user's private key, and save then again.
+                // sdk.renewKeys(Duration.ofDays(365 * 5))
+                // val identity = sdk.exportIdentity()
+                val identitySecondKey = randomString(11).toByteArray() // Dummy value
+                ssksPlugin.saveIdentity(chall.sessionId, authFactor = authFactor, rawTMRSymKey = tmrSymKey.encoded, identity = identitySecondKey, challenge = ssksTmrChallenge)
+                val secondChallenge = yourCompagnyDummyBackend.ChallengeSend(userId, authFactor,
+                    createUser = false,
+                    forceAuth = false
+                )
+                assert(secondChallenge.mustAuthenticate)
+                val retrieveSecondKey = ssksPlugin.retrieveIdentity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = tmrSymKey.encoded)
+                assert(!retrieveSecondKey.shouldRenewKey)
+                assert(retrieveSecondKey.identity.contentEquals(identitySecondKey))
+
+                val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
+                val inst2Retrieve = ssksPluginInst2.retrieveId entity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = tmrSymKey.encoded)
+                assert(!inst2Retrieve.shouldRenewKey)
+                assert(inst2Retrieve.identity.contentEquals(identitySecondKey))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        thread.start()
+    }
+}
+fun randomString(length: Int): String {
+    val chars = "abcdefghijklmnopqrstuvwxyz"
+    val random = Random()
+    return (1..length)
+        .map { chars[random.nextInt(chars.length)] }
+        .joinToString("")
 }
