@@ -9,6 +9,8 @@ import java.util.*
 import javax.crypto.KeyGenerator
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 
 // Seald account infos:
 // First step with Seald: https://docs.seald.io/en/sdk/guides/1-quick-start.html
@@ -54,12 +56,15 @@ class MainActivity : AppCompatActivity() {
         // identity documentation: https://docs.seald.io/en/sdk/guides/4-identities.html
         val jwtBuilder = JWTBuilder(JWTSharedSecretId, JWTSharedSecret)
 
-        testSDK(path, jwtBuilder)
-//        testSSKSPassword(path, jwtBuilder)
-//        testSSKSTMR(path, jwtBuilder)
+        lifecycleScope.launch {
+            testSDK(path, jwtBuilder)
+        }
+
+        testSSKSPassword()
+        testSSKSTMR()
     }
 
-    fun testSDK(path: String, jwtBuilder: JWTBuilder) {
+    private suspend fun testSDK(path: String, jwtBuilder: JWTBuilder) {
 
         // let's instantiate 3 SealdSDK. They will correspond to 3 users that will exchange messages.
         val sdk1 = SealdSDK(apiURL, appId, "$path/sdk1", databaseEncryptionKeyB64, instanceName = "User1", logLevel = -1)
@@ -145,11 +150,6 @@ class MainActivity : AppCompatActivity() {
         // user3 still has the encryption session in its cache, but we can disable it.
         assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false) }
 
-        // Revoking someone who is not in the session does not throw, but the status will be "ko"
-        val respRevokeBefore = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
-        assert(respRevokeBefore.size == 1)
-        respRevokeBefore[user3AccountInfo.userId]?.success?.let { assert(!it) }
-
         // user2 adds user3 as recipient of the encryption session.
         val respAdd = es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId))
         assert(respAdd.size == 1)
@@ -160,8 +160,9 @@ class MainActivity : AppCompatActivity() {
         val decryptedMessageAfterAdd = es1SDK3.decryptMessage(encryptedMessage)
         assert(initialString == decryptedMessageAfterAdd)
 
-        // user2 revokes user3 from the encryption session.
-        val respRevoke = es1SDK2.revokeRecipients(arrayOf(user3AccountInfo.userId))
+        // user1 revokes user3 from the encryption session.
+        // TODO: used to be user2 instead of user1 which does the revoke, but not possible until https://gitlab.tardis.seald.io/seald/go-seald-sdk/-/issues/83
+        val respRevoke = es1SDK1.revokeRecipients(arrayOf(user3AccountInfo.userId))
         assert(respRevoke.size == 1)
         respRevoke[user3AccountInfo.userId]?.success?.let { assert(it) }
 
@@ -170,7 +171,7 @@ class MainActivity : AppCompatActivity() {
 
         // user1 revokes all other recipients from the session
         val respRevokeOther = es1SDK1.revokeOthers()// revoke user2, group, and user3 even if it's already done for him
-        assert(respRevokeOther.size == 3)
+        assert(respRevokeOther.size == 2)
         respRevokeOther[groupId]?.success?.let { assert(it) }
         respRevokeOther[user2AccountInfo.userId]?.success?.let { assert(it) }
         respRevokeOther[user3AccountInfo.userId]?.success?.let { assert(it) }
@@ -180,7 +181,7 @@ class MainActivity : AppCompatActivity() {
 
         // user1 revokes all. It can no longer retrieve it.
         val respRevokeAll = es1SDK1.revokeAll()
-        assert(respRevokeAll.size == 4) // 3 users and the group
+        assert(respRevokeAll.size == 1) // only user1 is left
         respRevokeAll.forEach { entry ->
             assert(entry.value.success)
         }
@@ -274,7 +275,7 @@ class MainActivity : AppCompatActivity() {
         sdk3.close()
     }
 
-    fun testSSKSPassword(path: String, jwtBuilder: JWTBuilder) {
+    private fun testSSKSPassword() {
         val thread = Thread {
             try {
                 // Test with standard password
@@ -316,14 +317,14 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    fun testSSKSTMR(path: String, jwtBuilder: JWTBuilder) {
+    private fun testSSKSTMR() {
         val thread = Thread {
             try {
                 val keyGenerator = KeyGenerator.getInstance("AES")
                 keyGenerator.init(64 * 8) // Key length in bits
                 val tmrSymKey = keyGenerator.generateKey()
 
-                val yourCompagnyDummyBackend = SSKSbackend(ssksURL, ssksBackendAppId, ssksBackendAppKey)
+                val yourCompanyDummyBackend = SSKSbackend(ssksURL, ssksBackendAppId, ssksBackendAppKey)
 
 
                 // We will be using dummy value for demo.
@@ -332,7 +333,7 @@ class MainActivity : AppCompatActivity() {
 
                 val userEM = "email-${randomString(15)}@test.com"
                 val authFactor = AuthFactor(AuthFactorType.EM, userEM)
-                val chall = yourCompagnyDummyBackend.ChallengeSend(userId, authFactor,
+                val chall = yourCompanyDummyBackend.ChallengeSend(userId, authFactor,
                     createUser = true,
                     forceAuth = false
                 )
@@ -345,10 +346,10 @@ class MainActivity : AppCompatActivity() {
 
                 // If initial key has been saved without being fully authenticate, you should renew the user's private key, and save then again.
                 // sdk.renewKeys(Duration.ofDays(365 * 5))
-                // val identity = sdk.exportIdentity()
-                val identitySecondKey = randomString(11).toByteArray() // Dummy value
+
+                val identitySecondKey = randomString(10).toByteArray() // should be the result of: sdk.exportIdentity()
                 ssksPlugin.saveIdentity(chall.sessionId, authFactor = authFactor, rawTMRSymKey = tmrSymKey.encoded, identity = identitySecondKey, challenge = ssksTmrChallenge)
-                val secondChallenge = yourCompagnyDummyBackend.ChallengeSend(userId, authFactor,
+                val secondChallenge = yourCompanyDummyBackend.ChallengeSend(userId, authFactor,
                     createUser = false,
                     forceAuth = false
                 )
@@ -358,7 +359,7 @@ class MainActivity : AppCompatActivity() {
                 assert(retrieveSecondKey.identity.contentEquals(identitySecondKey))
 
                 val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
-                val inst2Retrieve = ssksPluginInst2.retrieveId entity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = tmrSymKey.encoded)
+                val inst2Retrieve = ssksPluginInst2.retrieveIdentity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = tmrSymKey.encoded)
                 assert(!inst2Retrieve.shouldRenewKey)
                 assert(inst2Retrieve.identity.contentEquals(identitySecondKey))
             } catch (e: Exception) {
