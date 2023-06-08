@@ -1,15 +1,17 @@
 package io.seald.seald_sdk_demo_app_android
 
+import android.annotation.SuppressLint
 import android.os.Bundle
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import io.seald.seald_sdk.*
+import kotlinx.coroutines.*
 import java.io.File
 import java.time.Duration
 import java.util.*
 import javax.crypto.KeyGenerator
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
-import kotlinx.coroutines.*
 
 // Seald account infos:
 // First step with Seald: https://docs.seald.io/en/sdk/guides/1-quick-start.html
@@ -22,7 +24,8 @@ const val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8
 // The Seald SDK uses a local database that will persist on disk.
 // When instantiating a SealdSDK, it is highly recommended to set a symmetric key to encrypt this database.
 // This demo will use a fixed key. It should be generated at signup, and retrieved from your backend at login.
-const val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
+const val databaseEncryptionKeyB64 =
+    "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
 
 const val ssksURL = "https://ssks.soyouz.seald.io/"
 const val ssksBackendAppId = "00000000-0000-0000-0000-000000000001"
@@ -39,6 +42,7 @@ fun deleteRecursive(fileOrDirectory: File) {
 }
 
 class MainActivity : AppCompatActivity() {
+    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -55,312 +59,473 @@ class MainActivity : AppCompatActivity() {
         // identity documentation: https://docs.seald.io/en/sdk/guides/4-identities.html
         val jwtBuilder = JWTBuilder(JWTSharedSecretId, JWTSharedSecret)
 
-        MainScope().launch {
-            testSDK(path, jwtBuilder)
-            testSSKSPassword()
-            withContext(Dispatchers.Default) {// Dispatch coroutine in another thread
-                // TMR uses SSKS Backend that do network API call. Network call are forbidden in the main thread, and its context.
-                testSSKSTMR()
+        CoroutineScope(Dispatchers.Default).launch {
+            val testSDKResult = async {
+                val resultView: TextView = findViewById(R.id.testSDK)
+                withContext(Dispatchers.Main) { resultView.text = "test SDK: Running..." }
+                val result = testSDK(path, jwtBuilder)
+                withContext(Dispatchers.Main) {
+                    resultView.text = "test SDK: ${if (result) "success" else "error"}"
+                }
             }
+            val testSSKSTMRResult = async {
+                val resultView: TextView = findViewById(R.id.testSsksPassword)
+                withContext(Dispatchers.Main) { resultView.text = "test SSKS Password: Running..." }
+                val result = testSSKSPassword()
+                withContext(Dispatchers.Main) {
+                    resultView.text = "test SSKS Password: ${if (result) "success" else "error"}"
+                }
+            }
+            val testSSKSPasswordResult = async {
+                val resultView: TextView = findViewById(R.id.testSsksTMR)
+                withContext(Dispatchers.Main) { resultView.text = "test SSKS TMR: Running..." }
+                val result = testSSKSTMR()
+                withContext(Dispatchers.Main) {
+                    resultView.text = "test SSKS TMR: ${if (result) "success" else "error"}"
+                }
+            }
+
+            testSDKResult.await()
+            testSSKSTMRResult.await()
+            testSSKSPasswordResult.await()
         }
     }
 
-    private suspend fun testSDK(path: String, jwtBuilder: JWTBuilder) {
+    private suspend fun testSDK(path: String, jwtBuilder: JWTBuilder): Boolean {
+        try {
+            // let's instantiate 3 SealdSDK. They will correspond to 3 users that will exchange messages.
+            val sdk1 = SealdSDK(
+                apiURL,
+                appId,
+                "$path/sdk1",
+                databaseEncryptionKeyB64,
+                instanceName = "User1",
+                logLevel = -1
+            )
+            val sdk2 = SealdSDK(
+                apiURL,
+                appId,
+                "$path/sdk2",
+                databaseEncryptionKeyB64,
+                instanceName = "User2",
+                logLevel = -1
+            )
+            val sdk3 = SealdSDK(
+                apiURL,
+                appId,
+                "$path/sdk3",
+                databaseEncryptionKeyB64,
+                instanceName = "User3",
+                logLevel = -1
+            )
 
-        // let's instantiate 3 SealdSDK. They will correspond to 3 users that will exchange messages.
-        val sdk1 = SealdSDK(apiURL, appId, "$path/sdk1", databaseEncryptionKeyB64, instanceName = "User1", logLevel = -1)
-        val sdk2 = SealdSDK(apiURL, appId, "$path/sdk2", databaseEncryptionKeyB64, instanceName = "User2", logLevel = -1)
-        val sdk3 = SealdSDK(apiURL, appId, "$path/sdk3", databaseEncryptionKeyB64, instanceName = "User3", logLevel = -1)
+            // retrieve info about current user before creating a user should return null
+            val retrieveNoAccount = sdk1.getCurrentAccountInfoAsync()
+            assert(retrieveNoAccount == null)
 
-        // retrieve info about current user before creating a user should return null
-        val retrieveNoAccount = sdk1.getCurrentAccountInfo().await()
-        assert(retrieveNoAccount == null)
+            // Create the 3 accounts. Again, the signupJWT should be generated by your backend
+            val sdk1Deferred = CoroutineScope(Dispatchers.Default).async { sdk1.createAccount(jwtBuilder.signupJWT(), "User1", "deviceNameUser1") }
+            val sdk2Deferred = CoroutineScope(Dispatchers.Default).async { sdk2.createAccount(jwtBuilder.signupJWT(), "User2", "deviceNameUser2") }
+            val sdk3Deferred = CoroutineScope(Dispatchers.Default).async { sdk3.createAccount(jwtBuilder.signupJWT(), "User3", "deviceNameUser3") }
+            val user1AccountInfo = sdk1Deferred.await()
+            val user2AccountInfo = sdk2Deferred.await()
+            val user3AccountInfo = sdk3Deferred.await()
 
-        // Create the 3 accounts. Again, the signupJWT should be generated by your backend
-        val user1AccountInfo = sdk1.createAccount(jwtBuilder.signupJWT(), "User1", "deviceNameUser1").await()
-        val user2AccountInfo = sdk2.createAccount(jwtBuilder.signupJWT(), "User2", "deviceNameUser2").await()
-        val user3AccountInfo = sdk3.createAccount(jwtBuilder.signupJWT(), "User3", "deviceNameUser3").await()
+            // retrieve info about current user:
+            val retrieveAccountInfo = sdk1.getCurrentAccountInfoAsync()
+            assert(retrieveAccountInfo != null)
+            assert(retrieveAccountInfo?.userId == user1AccountInfo.userId)
+            assert(retrieveAccountInfo?.deviceId == user1AccountInfo.deviceId)
 
-        // retrieve info about current user:
-        val retrieveAccountInfo = sdk1.getCurrentAccountInfo().await()
-        assert(retrieveAccountInfo != null)
-        assert(retrieveAccountInfo?.userId == user1AccountInfo.userId)
-        assert(retrieveAccountInfo?.deviceId == user1AccountInfo.deviceId)
+            // Create group: https://docs.seald.io/sdk/guides/5-groups.html
+            val groupName = "group-1"
+            val groupMembers = arrayOf(user1AccountInfo.userId)
+            val groupAdmins = arrayOf(user1AccountInfo.userId)
+            val groupId = sdk1.createGroupAsync(groupName, groupMembers, groupAdmins)
 
-        // Create group: https://docs.seald.io/sdk/guides/5-groups.html
-        val groupName = "group-1"
-        val groupMembers = arrayOf(user1AccountInfo.userId)
-        val groupAdmins = arrayOf(user1AccountInfo.userId)
-        val groupId = sdk1.createGroup(groupName, groupMembers, groupAdmins).await()
+            // Manage group members and admins
+            sdk1.addGroupMembersAsync(groupId, arrayOf(user2AccountInfo.userId))
+                 // Add user2 as group member
+            sdk1.addGroupMembersAsync(
+                groupId,
+                arrayOf(user3AccountInfo.userId),
+                arrayOf(user3AccountInfo.userId)
+            ) // user1 add user3 as group member and group admin
+            sdk3.removeGroupMembersAsync(groupId, arrayOf(user2AccountInfo.userId))
+                 // user3 can remove user2
+            sdk3.setGroupAdminsAsync(groupId, arrayOf(), arrayOf(user1AccountInfo.userId))
+                 // user3 can remove user1 from admins
 
-        // Manage group members and admins
-        sdk1.addGroupMembers(groupId, arrayOf(user2AccountInfo.userId)).await() // Add user2 as group member
-        sdk1.addGroupMembers(groupId, arrayOf(user3AccountInfo.userId), arrayOf(user3AccountInfo.userId)).await() // user1 add user3 as group member and group admin
-        sdk3.removeGroupMembers(groupId, arrayOf(user2AccountInfo.userId)).await() // user3 can remove user2
-        sdk3.setGroupAdmins(groupId, arrayOf(), arrayOf(user1AccountInfo.userId)).await() // user3 can remove user1 from admins
+            // Create encryption session: https://docs.seald.io/sdk/guides/6-encryption-sessions.html
+            val recipient = arrayOf(user1AccountInfo.userId, user2AccountInfo.userId, groupId)
+            val es1SDK1 = sdk1.createEncryptionSessionAsync(recipient)
+                 // user1, user2, and group as recipients
 
-        // Create encryption session: https://docs.seald.io/sdk/guides/6-encryption-sessions.html
-        val recipient = arrayOf(user1AccountInfo.userId, user2AccountInfo.userId, groupId)
-        val es1SDK1 = sdk1.createEncryptionSession(recipient).await() // user1, user2, and group as recipients
+            // The io.seald.seald_sdk.EncryptionSession object can encrypt and decrypt for user1
+            val initialString = "a message that needs to be encrypted!"
+            val encryptedMessage = es1SDK1.encryptMessageAsync(initialString)
+            val decryptedMessage = es1SDK1.decryptMessageAsync(encryptedMessage)
+            assert(initialString == decryptedMessage)
 
-        // The io.seald.seald_sdk.EncryptionSession object can encrypt and decrypt for user1
-        val initialString = "a message that needs to be encrypted!"
-        val encryptedMessage = es1SDK1.encryptMessage(initialString).await()
-        val decryptedMessage = es1SDK1.decryptMessage(encryptedMessage).await()
-        assert(initialString == decryptedMessage)
+            // Create a test file on disk that we will encrypt/decrypt
+            val filename = "testfile.txt"
+            val fileContent = "File clear data."
+            val clearFile = File(getFilesDir(), "/$filename")
+            clearFile.writeText(fileContent)
 
-        // Create a test file on disk that we will encrypt/decrypt
-        val filename = "testfile.txt"
-        val fileContent = "File clear data."
-        val clearFile = File(getFilesDir(), "/$filename")
-        clearFile.writeText(fileContent)
+            // encrypt the test file. Resulting file will be write alongside the source file, with `.seald` extension added
+            val encryptedFileURI = es1SDK1.encryptFileFromURIAsync(clearFile.absolutePath)
 
-        // encrypt the test file. Resulting file will be write alongside the source file, with `.seald` extension added
-        val encryptedFileURI = es1SDK1.encryptFileFromURI(clearFile.absolutePath).await()
+            // user1 can retrieve the encryptionSession directly from the encrypted file
+            val es1SDK1FromFile = sdk1.retrieveEncryptionSessionFromFileAsync(encryptedFileURI)
 
-        // user1 can retrieve the encryptionSession directly from the encrypted file
-        val es1SDK1FromFile = sdk1.retrieveEncryptionSessionFromFile(encryptedFileURI).await()
+            // The retrieved session can decrypt the file.
+            // The decrypted file will be named with the name it has at encryption. Any renaming of the encrypted file will be ignore.
+            // NOTE: In this example, the decrypted file will have `(1)` suffix to avoid overwriting the original clear file.
+            val decryptedFileURI = es1SDK1FromFile.decryptFileFromURIAsync(encryptedFileURI)
+            assertTrue { decryptedFileURI.endsWith("testfile (1).txt") }
+            val decryptedFile = File(decryptedFileURI)
+            assert(fileContent == decryptedFile.readText())
 
-        // The retrieved session can decrypt the file.
-        // The decrypted file will be named with the name it has at encryption. Any renaming of the encrypted file will be ignore.
-        // NOTE: In this example, the decrypted file will have `(1)` suffix to avoid overwriting the original clear file.
-        val decryptedFileURI = es1SDK1FromFile.decryptFileFromURI(encryptedFileURI).await()
-        assertTrue { decryptedFileURI.endsWith("testfile (1).txt") }
-        val decryptedFile = File(decryptedFileURI)
-        assert(fileContent == decryptedFile.readText())
+            // user1 can retrieve the EncryptionSession from the encrypted message
+            val es1SDK1RetrieveFromMess =
+                sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
+            val decryptedMessageFromMess =
+                es1SDK1RetrieveFromMess.decryptMessageAsync(encryptedMessage)
+            assert(initialString == decryptedMessageFromMess)
 
-        // user1 can retrieve the EncryptionSession from the encrypted message
-        val es1SDK1RetrieveFromMess = sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, true).await()
-        val decryptedMessageFromMess = es1SDK1RetrieveFromMess.decryptMessage(encryptedMessage).await()
-        assert(initialString == decryptedMessageFromMess)
+            // user2 and user3 can retrieve the encryptionSession (from the encrypted message or the session ID).
+            val es1SDK2 = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, true)
+            val decryptedMessageSDK2 = es1SDK2.decryptMessageAsync(encryptedMessage)
+            assert(initialString == decryptedMessageSDK2)
 
-        // user2 and user3 can retrieve the encryptionSession (from the encrypted message or the session ID).
-        val es1SDK2 = sdk2.retrieveEncryptionSession(es1SDK1.sessionId, true).await()
-        val decryptedMessageSDK2 = es1SDK2.decryptMessage(encryptedMessage).await()
-        assert(initialString == decryptedMessageSDK2)
+            val es1SDK3FromGroup =
+                sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
+            val decryptedMessageSDK3 = es1SDK3FromGroup.decryptMessageAsync(encryptedMessage)
+            assert(initialString == decryptedMessageSDK3)
 
-        val es1SDK3FromGroup = sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, true).await()
-        val decryptedMessageSDK3 = es1SDK3FromGroup.decryptMessage(encryptedMessage).await()
-        assert(initialString == decryptedMessageSDK3)
+            // user3 removes all members of "group-1". A group without member is deleted.
+            sdk3.removeGroupMembersAsync(
+                groupId,
+                arrayOf(user1AccountInfo.userId, user3AccountInfo.userId)
+            )
 
-        // user3 removes all members of "group-1". A group without member is deleted.
-        sdk3.removeGroupMembers(groupId, arrayOf(user1AccountInfo.userId, user3AccountInfo.userId)).await()
+            // user3 could retrieve the previous encryption session only because "group-1" was set as recipient.
+            // As the group was deleted, it can no longer access it.
+            // user3 still has the encryption session in its cache, but we can disable it.
+            assertFails {
+                sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
+            }
 
-        // user3 could retrieve the previous encryption session only because "group-1" was set as recipient.
-        // As the group was deleted, it can no longer access it.
-        // user3 still has the encryption session in its cache, but we can disable it.
-        assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false).await() }
+            // user2 adds user3 as recipient of the encryption session.
+            val respAdd = es1SDK2.addRecipientsAsync(arrayOf(user3AccountInfo.userId))
+            assert(respAdd.size == 1)
+            respAdd[user3AccountInfo.deviceId]?.success?.let { assert(it) } // Note that addRecipient return deviceId
 
-        // user2 adds user3 as recipient of the encryption session.
-        val respAdd = es1SDK2.addRecipients(arrayOf(user3AccountInfo.userId)).await()
-        assert(respAdd.size == 1)
-        respAdd[user3AccountInfo.deviceId]?.success?.let { assert(it) } // Note that addRecipient return deviceId
+            // user3 can now retrieve it.
+            val es1SDK3 = sdk3.retrieveEncryptionSessionAsync(es1SDK1.sessionId, false)
+            val decryptedMessageAfterAdd = es1SDK3.decryptMessageAsync(encryptedMessage)
+            assert(initialString == decryptedMessageAfterAdd)
 
-        // user3 can now retrieve it.
-        val es1SDK3 = sdk3.retrieveEncryptionSession(es1SDK1.sessionId, false).await()
-        val decryptedMessageAfterAdd = es1SDK3.decryptMessage(encryptedMessage).await()
-        assert(initialString == decryptedMessageAfterAdd)
+            // user1 revokes user3 from the encryption session.
+            // TODO: used to be user2 instead of user1 which does the revoke, but not possible until https://gitlab.tardis.seald.io/seald/go-seald-sdk/-/issues/83
+            val respRevoke = es1SDK1.revokeRecipientsAsync(arrayOf(user3AccountInfo.userId))
+            assert(respRevoke.size == 1)
+            respRevoke[user3AccountInfo.userId]?.success?.let { assert(it) }
 
-        // user1 revokes user3 from the encryption session.
-        // TODO: used to be user2 instead of user1 which does the revoke, but not possible until https://gitlab.tardis.seald.io/seald/go-seald-sdk/-/issues/83
-        val respRevoke = es1SDK1.revokeRecipients(arrayOf(user3AccountInfo.userId)).await()
-        assert(respRevoke.size == 1)
-        respRevoke[user3AccountInfo.userId]?.success?.let { assert(it) }
+            // user3 cannot retrieve the session anymore
+            assertFails {
+                sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
+            }
 
-        // user3 cannot retrieve the session anymore
-        assertFails { sdk3.retrieveEncryptionSessionFromMessage(encryptedMessage, false).await() }
+            // user1 revokes all other recipients from the session
+            val respRevokeOther = es1SDK1.revokeOthersAsync()
+                // revoke user2, group, and user3 even if it's already done for him
+            assert(respRevokeOther.size == 2)
+            respRevokeOther[groupId]?.success?.let { assert(it) }
+            respRevokeOther[user2AccountInfo.userId]?.success?.let { assert(it) }
+            respRevokeOther[user3AccountInfo.userId]?.success?.let { assert(it) }
 
-        // user1 revokes all other recipients from the session
-        val respRevokeOther = es1SDK1.revokeOthers().await()// revoke user2, group, and user3 even if it's already done for him
-        assert(respRevokeOther.size == 2)
-        respRevokeOther[groupId]?.success?.let { assert(it) }
-        respRevokeOther[user2AccountInfo.userId]?.success?.let { assert(it) }
-        respRevokeOther[user3AccountInfo.userId]?.success?.let { assert(it) }
+            // user2 cannot retrieve the session anymore
+            assertFails {
+                sdk2.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
+            }
 
-        // user2 cannot retrieve the session anymore
-        assertFails { sdk2.retrieveEncryptionSessionFromMessage(encryptedMessage, false).await() }
+            // user1 revokes all. It can no longer retrieve it.
+            val respRevokeAll = es1SDK1.revokeAllAsync()
+            assert(respRevokeAll.size == 1) // only user1 is left
+            respRevokeAll.forEach { entry ->
+                assert(entry.value.success)
+            }
 
-        // user1 revokes all. It can no longer retrieve it.
-        val respRevokeAll = es1SDK1.revokeAll().await()
-        assert(respRevokeAll.size == 1) // only user1 is left
-        respRevokeAll.forEach { entry ->
-            assert(entry.value.success)
+            assertFails {
+                sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
+            }
+
+            // Create additional data for user1
+            val es2SDK1 =
+                sdk1.createEncryptionSessionAsync(arrayOf(user1AccountInfo.userId), true)
+            val anotherMessage = "nobody should read that!"
+            val secondEncryptedMessage = es2SDK1.encryptMessageAsync(anotherMessage)
+
+            // user1 can renew its key, and still decrypt old messages
+            sdk1.renewKeys(Duration.ofDays(365 * 5))
+            val es2SDK1AfterRenew = sdk1.retrieveEncryptionSessionAsync(es2SDK1.sessionId, false)
+            val decryptedMessageAfterRenew =
+                es2SDK1AfterRenew.decryptMessageAsync(secondEncryptedMessage)
+            assert(anotherMessage == decryptedMessageAfterRenew)
+
+            // CONNECTORS https://docs.seald.io/en/sdk/guides/jwt.html#adding-a-userid
+
+            // we can add a custom userId using a JWT
+            val customConnectorJWTValue = "user1-custom-id"
+            val addConnectorJWT = jwtBuilder.connectorJWT(customConnectorJWTValue, appId)
+            sdk1.pushJWTAsync(addConnectorJWT)
+
+            val connectors = sdk1.listConnectorsAsync()
+            assert(connectors.size == 1)
+            assert(connectors[0].state == io.seald.seald_sdk.ConnectorState.VALIDATED)
+            assert(connectors[0].type == io.seald.seald_sdk.ConnectorType.AP)
+            assert(connectors[0].sealdId == user1AccountInfo.userId)
+            assert(connectors[0].value == "${customConnectorJWTValue}@${appId}")
+
+            // Retrieve connector by its id
+            val retrieveConnector = sdk1.retrieveConnectorAsync(connectors[0].id)
+            assert(retrieveConnector.sealdId == user1AccountInfo.userId)
+            assert(retrieveConnector.state == io.seald.seald_sdk.ConnectorState.VALIDATED)
+            assert(retrieveConnector.type == io.seald.seald_sdk.ConnectorType.AP)
+            assert(retrieveConnector.value == "${customConnectorJWTValue}@${appId}")
+
+            // Retrieve connectors from a user id.
+            val connectorsFromSealdId =
+                sdk1.getConnectorsFromSealdIdAsync(user1AccountInfo.userId)
+            assert(connectorsFromSealdId.size == 1)
+            assert(connectorsFromSealdId[0].state == io.seald.seald_sdk.ConnectorState.VALIDATED)
+            assert(connectorsFromSealdId[0].type == io.seald.seald_sdk.ConnectorType.AP)
+            assert(connectorsFromSealdId[0].sealdId == user1AccountInfo.userId)
+            assert(connectorsFromSealdId[0].value == "${customConnectorJWTValue}@${appId}")
+
+            // Get sealdId of a user from a connector
+            val sealdIds = sdk2.getSealdIdsFromConnectorsAsync(
+                arrayOf(
+                    io.seald.seald_sdk.ConnectorTypeValue(
+                        io.seald.seald_sdk.ConnectorType.AP,
+                        "${customConnectorJWTValue}@${appId}"
+                    )
+                )
+            )
+            assert(sealdIds.size == 1)
+            assert(sealdIds[0] == user1AccountInfo.userId)
+
+            // user1 can remove a connector
+            sdk1.removeConnectorAsync(connectors[0].id)
+
+            // verify that only one connector left
+            val connectorListAfterRevoke = sdk1.listConnectorsAsync()
+            assert(connectorListAfterRevoke.isEmpty())
+
+            // user1 can export its identity
+            val exportIdentity = sdk1.exportIdentityAsync()
+
+            // We can instantiate a new SealdSDK, import the exported identity
+            val sdk1Exported = SealdSDK(
+                apiURL,
+                appId,
+                "$path/sdk1Exported",
+                databaseEncryptionKeyB64,
+                instanceName = "sdk1",
+                logLevel = -1
+            )
+            sdk1Exported.importIdentityAsync(exportIdentity)
+
+            // SDK with imported identity can decrypt
+            val es2SDK1Exported =
+                sdk1Exported.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage)
+            val clearMessageExportedIdentity =
+                es2SDK1Exported.decryptMessageAsync(secondEncryptedMessage)
+            assert(anotherMessage == clearMessageExportedIdentity)
+
+            // user1 can create sub identity
+            val subIdentity = sdk1.createSubIdentityAsync("SUB-deviceName")
+            assert(subIdentity.deviceId != "")
+
+            // first device needs to reencrypt for the new device
+            sdk1.massReencryptAsync(subIdentity.deviceId)
+            // We can instantiate a new SealdSDK, import the sub-device identity
+            val sdk1SubDevice = SealdSDK(
+                apiURL,
+                appId,
+                "$path/sdk1SubDevice",
+                databaseEncryptionKeyB64,
+                instanceName = "sdk1",
+                logLevel = -1
+            )
+            sdk1SubDevice.importIdentityAsync(subIdentity.backupKey)
+
+            // sub device can decrypt
+            val es2SDK1SubDevice =
+                sdk1SubDevice.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage, false)
+
+            val clearMessageSubdIdentity =
+                es2SDK1SubDevice.decryptMessageAsync(secondEncryptedMessage)
+            assert(anotherMessage == clearMessageSubdIdentity)
+
+            sdk1.heartbeatAsync()
+
+            // close SDKs
+            sdk1.close()
+            sdk2.close()
+            sdk3.close()
+        } catch (e: java.lang.Error) {
+            println(e.printStackTrace())
+            return false
         }
-
-        assertFails { sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage, false).await() }
-
-        // Create additional data for user1
-        val es2SDK1 = sdk1.createEncryptionSession(arrayOf(user1AccountInfo.userId), true).await()
-        val anotherMessage = "nobody should read that!"
-        val secondEncryptedMessage = es2SDK1.encryptMessage(anotherMessage).await()
-
-        // user1 can renew its key, and still decrypt old messages
-        sdk1.renewKeys(Duration.ofDays(365 * 5)).await()
-        val es2SDK1AfterRenew = sdk1.retrieveEncryptionSession(es2SDK1.sessionId, false).await()
-        val decryptedMessageAfterRenew = es2SDK1AfterRenew.decryptMessage(secondEncryptedMessage).await()
-        assert(anotherMessage == decryptedMessageAfterRenew)
-
-        // CONNECTORS https://docs.seald.io/en/sdk/guides/jwt.html#adding-a-userid
-
-        // we can add a custom userId using a JWT
-        val customConnectorJWTValue = "user1-custom-id"
-        val addConnectorJWT = jwtBuilder.connectorJWT(customConnectorJWTValue, appId)
-        sdk1.pushJWT(addConnectorJWT).await()
-
-        val connectors = sdk1.listConnectors().await()
-        assert(connectors.size == 1)
-        assert(connectors[0].state == io.seald.seald_sdk.ConnectorState.VALIDATED)
-        assert(connectors[0].type == io.seald.seald_sdk.ConnectorType.AP)
-        assert(connectors[0].sealdId == user1AccountInfo.userId)
-        assert(connectors[0].value == "${customConnectorJWTValue}@${appId}")
-
-        // Retrieve connector by its id
-        val retrieveConnector = sdk1.retrieveConnector(connectors[0].id).await()
-        assert(retrieveConnector.sealdId == user1AccountInfo.userId)
-        assert(retrieveConnector.state == io.seald.seald_sdk.ConnectorState.VALIDATED)
-        assert(retrieveConnector.type == io.seald.seald_sdk.ConnectorType.AP)
-        assert(retrieveConnector.value == "${customConnectorJWTValue}@${appId}")
-
-        // Retrieve connectors from a user id.
-        val connectorsFromSealdId = sdk1.getConnectorsFromSealdId(user1AccountInfo.userId).await()
-        assert(connectorsFromSealdId.size == 1)
-        assert(connectorsFromSealdId[0].state == io.seald.seald_sdk.ConnectorState.VALIDATED)
-        assert(connectorsFromSealdId[0].type == io.seald.seald_sdk.ConnectorType.AP)
-        assert(connectorsFromSealdId[0].sealdId == user1AccountInfo.userId)
-        assert(connectorsFromSealdId[0].value == "${customConnectorJWTValue}@${appId}")
-
-        // Get sealdId of a user from a connector
-        val sealdIds = sdk2.getSealdIdsFromConnectors(arrayOf(io.seald.seald_sdk.ConnectorTypeValue(io.seald.seald_sdk.ConnectorType.AP, "${customConnectorJWTValue}@${appId}"))).await()
-        assert(sealdIds.size == 1)
-        assert(sealdIds[0] == user1AccountInfo.userId)
-
-        // user1 can remove a connector
-        sdk1.removeConnector(connectors[0].id).await()
-
-        // verify that only one connector left
-        val connectorListAfterRevoke = sdk1.listConnectors().await()
-        assert(connectorListAfterRevoke.isEmpty())
-
-        // user1 can export its identity
-        val exportIdentity = sdk1.exportIdentity().await()
-
-        // We can instantiate a new SealdSDK, import the exported identity
-        val sdk1Exported = SealdSDK(apiURL, appId, "$path/sdk1Exported", databaseEncryptionKeyB64, instanceName = "sdk1", logLevel = -1)
-        sdk1Exported.importIdentity(exportIdentity).await()
-
-        // SDK with imported identity can decrypt
-        val es2SDK1Exported = sdk1Exported.retrieveEncryptionSessionFromMessage(secondEncryptedMessage).await()
-        val clearMessageExportedIdentity = es2SDK1Exported.decryptMessage(secondEncryptedMessage).await()
-        assert(anotherMessage == clearMessageExportedIdentity)
-
-        // user1 can create sub identity
-        val subIdentity = sdk1.createSubIdentity("SUB-deviceName").await()
-        assert(subIdentity.deviceId != "")
-
-        // first device needs to reencrypt for the new device
-        sdk1.massReencrypt(subIdentity.deviceId).await()
-        // We can instantiate a new SealdSDK, import the sub-device identity
-        val sdk1SubDevice = SealdSDK(apiURL, appId, "$path/sdk1SubDevice", databaseEncryptionKeyB64, instanceName = "sdk1", logLevel = -1)
-        sdk1SubDevice.importIdentity(subIdentity.backupKey).await()
-
-        // sub device can decrypt
-        val es2SDK1SubDevice = sdk1SubDevice.retrieveEncryptionSessionFromMessage(secondEncryptedMessage, false).await()
-        val clearMessageSubdIdentity = es2SDK1SubDevice.decryptMessage(secondEncryptedMessage).await()
-        assert(anotherMessage == clearMessageSubdIdentity)
-
-        sdk1.heartbeat().await()
-
-        // close SDKs
-        sdk1.close()
-        sdk2.close()
-        sdk3.close()
+        return true
     }
 
-    private suspend fun testSSKSPassword() {
-        // Test with standard password
-        val userIdPassword = "user-${randomString(10)}" // should be: AccountInfo.userId
-        val userPassword = randomString(10)
-        val dummyIdentity = randomString(10).toByteArray()
-        val ssksPlugin = SealdSSKSPasswordPlugin(ssksURL, appId)
+    private suspend fun testSSKSPassword(): Boolean {
+        try {
+            // Test with standard password
+            val userIdPassword = "user-${randomString(10)}" // should be: AccountInfo.userId
+            val userPassword = randomString(10)
+            val dummyIdentity = randomString(10).toByteArray()
+            val ssksPlugin = SealdSSKSPasswordPlugin(ssksURL, appId)
 
-        ssksPlugin.saveIdentityFromPassword(userIdPassword, userPassword, dummyIdentity).await()
-        val retrievedIdentity = ssksPlugin.retrieveIdentityFromPassword(userIdPassword, userPassword).await()
-        assert(retrievedIdentity.contentEquals(dummyIdentity))
+            ssksPlugin.saveIdentityFromPasswordAsync(userIdPassword, userPassword, dummyIdentity)
+            val retrievedIdentity =
+                ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
+            assert(retrievedIdentity.contentEquals(dummyIdentity))
 
-        val newPassword = "newPassword"
-        ssksPlugin.changeIdentityPassword(userIdPassword, userPassword, newPassword).await()
-        val retrieveNewPassword = ssksPlugin.retrieveIdentityFromPassword(userIdPassword, newPassword).await()
-        assert(retrieveNewPassword.contentEquals(dummyIdentity))
+            val newPassword = "newPassword"
+            ssksPlugin.changeIdentityPasswordAsync(userIdPassword, userPassword, newPassword)
+            val retrieveNewPassword =
+                ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, newPassword)
+            assert(retrieveNewPassword.contentEquals(dummyIdentity))
 
-        // Test with raw keys
-        val userIdRawKeys = "user-${randomString(10)}"
-        val keyGenerator = KeyGenerator.getInstance("AES")
-        keyGenerator.init(64 * 8) // Key length in bits
+            // Test with raw keys
+            val userIdRawKeys = "user-${randomString(10)}"
+            val keyGenerator = KeyGenerator.getInstance("AES")
+            keyGenerator.init(64 * 8) // Key length in bits
 
-        val rawEncryptionKey = keyGenerator.generateKey().encoded
-        val rawStorageKey = randomString(32)
+            val rawEncryptionKey = keyGenerator.generateKey().encoded
+            val rawStorageKey = randomString(32)
 
-        ssksPlugin.saveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey, dummyIdentity).await()
-        val retrievedFromRawKeys = ssksPlugin.retrieveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey).await()
-        assert(retrievedFromRawKeys.contentEquals(dummyIdentity))
+            ssksPlugin.saveIdentityFromRawKeysAsync(
+                userIdRawKeys,
+                rawStorageKey,
+                rawEncryptionKey,
+                dummyIdentity
+            )
+            val retrievedFromRawKeys = ssksPlugin.retrieveIdentityFromRawKeysAsync(
+                userIdRawKeys,
+                rawStorageKey,
+                rawEncryptionKey
+            )
+            assert(retrievedFromRawKeys.contentEquals(dummyIdentity))
 
-        ssksPlugin.saveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey, ByteArray(0)).await()
+            ssksPlugin.saveIdentityFromRawKeysAsync(
+                userIdRawKeys,
+                rawStorageKey,
+                rawEncryptionKey,
+                ByteArray(0)
+            )
 
-        val exception = assertFails { ssksPlugin.retrieveIdentityFromRawKeys(userIdRawKeys, rawStorageKey, rawEncryptionKey).await() }
-        assert(exception.localizedMessage == "ssks password cannot find identity with this id/password combination")
+            val exception = assertFails {
+                ssksPlugin.retrieveIdentityFromRawKeysAsync(
+                    userIdRawKeys,
+                    rawStorageKey,
+                    rawEncryptionKey
+                )
+            }
+            assert(exception.localizedMessage == "ssks password cannot find identity with this id/password combination")
+        } catch (e: java.lang.Error) {
+            println(e.printStackTrace())
+            return false
+        }
+        return true
     }
 
-    private suspend fun testSSKSTMR() {
-//        val thread = Thread {
-//            try {
-                val keyGenerator = KeyGenerator.getInstance("AES")
-                keyGenerator.init(64 * 8) // Key length in bits
-                val rawTMRSymKey = keyGenerator.generateKey().encoded
+    private suspend fun testSSKSTMR(): Boolean {
+        try {
+            val keyGenerator = KeyGenerator.getInstance("AES")
+            keyGenerator.init(64 * 8) // Key length in bits
+            val rawTMRSymKey = keyGenerator.generateKey().encoded
 
-                val yourCompanyDummyBackend = SSKSbackend(ssksURL, ssksBackendAppId, ssksBackendAppKey)
+            val yourCompanyDummyBackend = SSKSbackend(ssksURL, ssksBackendAppId, ssksBackendAppKey)
 
-                // We will be using dummy value for demo.
-                val userId = "user-${randomString(11)}" // should be: AccountInfo.userId
-                val dummyIdentity = randomString(11).toByteArray() // should be: sdk.exportIdentity()
+            // We will be using dummy value for demo.
+            val userId = "user-${randomString(11)}" // should be: AccountInfo.userId
+            val dummyIdentity = randomString(11).toByteArray() // should be: sdk.exportIdentity()
 
-                val userEM = "email-${randomString(15)}@test.com"
-                val authFactor = AuthFactor(AuthFactorType.EM, userEM)
-                val chall = yourCompanyDummyBackend.ChallengeSend(userId, authFactor,
-                    createUser = true,
-                    forceAuth = false
-                )
+            val userEM = "email-${randomString(15)}@test.com"
+            val authFactor = AuthFactor(AuthFactorType.EM, userEM)
+            val chall = yourCompanyDummyBackend.ChallengeSend(
+                userId, authFactor,
+                createUser = true,
+                forceAuth = false
+            ).await()
 
-                val ssksPlugin = SealdSSKSTmrPlugin(ssksURL, appId)
-                ssksPlugin.saveIdentity(chall.sessionId, authFactor = authFactor, rawTMRSymKey = rawTMRSymKey, identity = dummyIdentity, challenge = "").await()
-                val retrievedNotAuth = ssksPlugin.retrieveIdentity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = rawTMRSymKey).await()
-                assert(retrievedNotAuth.shouldRenewKey)
-                assert(retrievedNotAuth.identity.contentEquals(dummyIdentity))
+            val ssksPlugin = SealdSSKSTmrPlugin(ssksURL, appId)
+            ssksPlugin.saveIdentityAsync(
+                chall.sessionId,
+                authFactor = authFactor,
+                rawTMRSymKey = rawTMRSymKey,
+                identity = dummyIdentity,
+                challenge = ""
+            )
+            val retrievedNotAuth = ssksPlugin.retrieveIdentityAsync(
+                chall.sessionId,
+                authFactor = authFactor,
+                challenge = ssksTmrChallenge,
+                rawTMRSymKey = rawTMRSymKey
+            )
+            assert(retrievedNotAuth.shouldRenewKey)
+            assert(retrievedNotAuth.identity.contentEquals(dummyIdentity))
 
-                // If initial key has been saved without being fully authenticate, you should renew the user's private key, and save then again.
-                // sdk.renewKeys(Duration.ofDays(365 * 5))
+            // If initial key has been saved without being fully authenticate, you should renew the user's private key, and save then again.
+            // sdk.renewKeys(Duration.ofDays(365 * 5))
 
-                val identitySecondKey = randomString(10).toByteArray() // should be the result of: sdk.exportIdentity()
-                ssksPlugin.saveIdentity(chall.sessionId, authFactor = authFactor, rawTMRSymKey = rawTMRSymKey, identity = identitySecondKey, challenge = ssksTmrChallenge).await()
-                val secondChallenge = yourCompanyDummyBackend.ChallengeSend(userId, authFactor,
-                    createUser = false,
-                    forceAuth = false
-                )
-                assert(secondChallenge.mustAuthenticate)
-                val retrievedSecondKey = ssksPlugin.retrieveIdentity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = rawTMRSymKey).await()
-                assert(!retrievedSecondKey.shouldRenewKey)
-                assert(retrievedSecondKey.identity.contentEquals(identitySecondKey))
+            val identitySecondKey =
+                randomString(10).toByteArray() // should be the result of: sdk.exportIdentity()
+            ssksPlugin.saveIdentityAsync(
+                chall.sessionId,
+                authFactor = authFactor,
+                rawTMRSymKey = rawTMRSymKey,
+                identity = identitySecondKey,
+                challenge = ssksTmrChallenge
+            )
+            val secondChallenge = yourCompanyDummyBackend.ChallengeSend(
+                userId, authFactor,
+                createUser = false,
+                forceAuth = false
+            ).await()
+            assert(secondChallenge.mustAuthenticate)
+            val retrievedSecondKey = ssksPlugin.retrieveIdentityAsync(
+                chall.sessionId,
+                authFactor = authFactor,
+                challenge = ssksTmrChallenge,
+                rawTMRSymKey = rawTMRSymKey
+            )
+            assert(!retrievedSecondKey.shouldRenewKey)
+            assert(retrievedSecondKey.identity.contentEquals(identitySecondKey))
 
-                val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
-                val inst2Retrieve = ssksPluginInst2.retrieveIdentity(chall.sessionId, authFactor = authFactor, challenge = ssksTmrChallenge, rawTMRSymKey = rawTMRSymKey).await()
-                assert(!inst2Retrieve.shouldRenewKey)
-                assert(inst2Retrieve.identity.contentEquals(identitySecondKey))
-//            } catch (e: Error) {
-//                e.printStackTrace()
-//            }
-//        }
-//        thread.start()
+            val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
+            val inst2Retrieve = ssksPluginInst2.retrieveIdentity(
+                chall.sessionId,
+                authFactor = authFactor,
+                challenge = ssksTmrChallenge,
+                rawTMRSymKey = rawTMRSymKey
+            )
+            assert(!inst2Retrieve.shouldRenewKey)
+            assert(inst2Retrieve.identity.contentEquals(identitySecondKey))
+        } catch (e: java.lang.Error) {
+            println(e.printStackTrace())
+            return false
+        }
+        return true
     }
 }
+
 fun randomString(length: Int): String {
     val chars = "abcdefghijklmnopqrstuvwxyz"
     val random = Random()

@@ -1,6 +1,8 @@
 package io.seald.seald_sdk_demo_app_android
 
+import android.util.Log
 import io.seald.seald_sdk.AuthFactor
+import kotlinx.coroutines.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -49,7 +51,7 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
 
     }
 
-    fun ChallengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): ChallengeSendResponse {
+    fun ChallengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): Deferred<ChallengeSendResponse> = CoroutineScope(Dispatchers.Default).async {
         val jsonObject = """
     {
         "user_id": "$userId",
@@ -63,7 +65,7 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
 """.trimIndent()
 
         val resp = post("tmr/back/challenge_send/", jsonObject.toRequestBody(mediaType))
-        return Json.decodeFromString(resp)
+        return@async Json.decodeFromString(resp)
     }
 }
 
