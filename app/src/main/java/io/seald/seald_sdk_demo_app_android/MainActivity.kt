@@ -220,7 +220,7 @@ class MainActivity : AppCompatActivity() {
             // user2 adds user3 as recipient of the encryption session.
             val respAdd = es1SDK2.addRecipientsAsync(arrayOf(user3AccountInfo.userId))
             assert(respAdd.size == 1)
-            respAdd[user3AccountInfo.deviceId]?.success?.let { assert(it) } // Note that addRecipient return deviceId
+            assert(respAdd[user3AccountInfo.deviceId]!!.success) // Note that addRecipient return deviceId
 
             // user3 can now retrieve it.
             val es1SDK3 = sdk3.retrieveEncryptionSessionAsync(es1SDK1.sessionId, false)
@@ -231,7 +231,7 @@ class MainActivity : AppCompatActivity() {
             // TODO: used to be user2 instead of user1 which does the revoke, but not possible until https://gitlab.tardis.seald.io/seald/go-seald-sdk/-/issues/83
             val respRevoke = es1SDK1.revokeRecipientsAsync(arrayOf(user3AccountInfo.userId))
             assert(respRevoke.size == 1)
-            respRevoke[user3AccountInfo.userId]?.success?.let { assert(it) }
+            assert(respRevoke[user3AccountInfo.userId]!!.success)
 
             // user3 cannot retrieve the session anymore
             assertFails {
@@ -240,11 +240,9 @@ class MainActivity : AppCompatActivity() {
 
             // user1 revokes all other recipients from the session
             val respRevokeOther = es1SDK1.revokeOthersAsync()
-                // revoke user2, group, and user3 even if it's already done for him
-            assert(respRevokeOther.size == 2)
-            respRevokeOther[groupId]?.success?.let { assert(it) }
-            respRevokeOther[user2AccountInfo.userId]?.success?.let { assert(it) }
-            respRevokeOther[user3AccountInfo.userId]?.success?.let { assert(it) }
+            assert(respRevokeOther.size == 2) // revoke user2 and group
+            assert(respRevokeOther[groupId]!!.success)
+            assert(respRevokeOther[user2AccountInfo.userId]!!.success)
 
             // user2 cannot retrieve the session anymore
             assertFails {
