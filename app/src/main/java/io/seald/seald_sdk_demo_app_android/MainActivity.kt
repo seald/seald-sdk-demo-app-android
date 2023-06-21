@@ -41,6 +41,19 @@ fun deleteRecursive(fileOrDirectory: File) {
     fileOrDirectory.delete()
 }
 
+fun randomByteArray(length: Int): ByteArray {
+    val random = Random()
+    return ByteArray(length) { random.nextInt(256).toByte() }
+}
+
+fun randomString(length: Int): String {
+    val chars = "abcdefghijklmnopqrstuvwxyz"
+    val random = Random()
+    return (1..length)
+        .map { chars[random.nextInt(chars.length)] }
+        .joinToString("")
+}
+
 class MainActivity : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -144,17 +157,14 @@ class MainActivity : AppCompatActivity() {
             val groupId = sdk1.createGroupAsync(groupName, groupMembers, groupAdmins)
 
             // Manage group members and admins
+            // Add user2 as group member
             sdk1.addGroupMembersAsync(groupId, arrayOf(user2AccountInfo.userId))
-                 // Add user2 as group member
-            sdk1.addGroupMembersAsync(
-                groupId,
-                arrayOf(user3AccountInfo.userId),
-                arrayOf(user3AccountInfo.userId)
-            ) // user1 add user3 as group member and group admin
+            // user1 add user3 as group member and group admin
+            sdk1.addGroupMembersAsync(groupId, arrayOf(user3AccountInfo.userId), arrayOf(user3AccountInfo.userId))
+            // user3 can remove user2
             sdk3.removeGroupMembersAsync(groupId, arrayOf(user2AccountInfo.userId))
-                 // user3 can remove user2
+            // user3 can remove user1 from admins
             sdk3.setGroupAdminsAsync(groupId, arrayOf(), arrayOf(user1AccountInfo.userId))
-                 // user3 can remove user1 from admins
 
             // Create encryption session: https://docs.seald.io/sdk/guides/6-encryption-sessions.html
             val recipient = arrayOf(user1AccountInfo.userId, user2AccountInfo.userId, groupId)
@@ -173,14 +183,14 @@ class MainActivity : AppCompatActivity() {
             val clearFile = File(getFilesDir(), "/$filename")
             clearFile.writeText(fileContent)
 
-            // encrypt the test file. Resulting file will be write alongside the source file, with `.seald` extension added
+            // encrypt the test file. Resulting file will be written alongside the source file, with `.seald` extension added
             val encryptedFileURI = es1SDK1.encryptFileFromURIAsync(clearFile.absolutePath)
 
             // user1 can retrieve the encryptionSession directly from the encrypted file
             val es1SDK1FromFile = sdk1.retrieveEncryptionSessionFromFileAsync(encryptedFileURI)
 
             // The retrieved session can decrypt the file.
-            // The decrypted file will be named with the name it has at encryption. Any renaming of the encrypted file will be ignore.
+            // The decrypted file will be named with the name it had at encryption. Any renaming of the encrypted file will be ignore.
             // NOTE: In this example, the decrypted file will have `(1)` suffix to avoid overwriting the original clear file.
             val decryptedFileURI = es1SDK1FromFile.decryptFileFromURIAsync(encryptedFileURI)
             assertTrue { decryptedFileURI.endsWith("testfile (1).txt") }
@@ -252,9 +262,7 @@ class MainActivity : AppCompatActivity() {
             // user1 revokes all. It can no longer retrieve it.
             val respRevokeAll = es1SDK1.revokeAllAsync()
             assert(respRevokeAll.size == 1) // only user1 is left
-            respRevokeAll.forEach { entry ->
-                assert(entry.value.success)
-            }
+            assert(respRevokeAll[user1AccountInfo.userId]!!.success)
 
             assertFails {
                 sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
@@ -386,7 +394,7 @@ class MainActivity : AppCompatActivity() {
             // Test with standard password
             val userIdPassword = "user-${randomString(10)}" // should be: AccountInfo.userId
             val userPassword = randomString(10)
-            val dummyIdentity = randomString(10).toByteArray()
+            val dummyIdentity = randomByteArray(10)
             val ssksPlugin = SealdSSKSPasswordPlugin(ssksURL, appId)
 
             ssksPlugin.saveIdentityFromPasswordAsync(userIdPassword, userPassword, dummyIdentity)
@@ -396,8 +404,11 @@ class MainActivity : AppCompatActivity() {
 
             val newPassword = "newPassword"
             ssksPlugin.changeIdentityPasswordAsync(userIdPassword, userPassword, newPassword)
-            val retrieveNewPassword =
-                ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, newPassword)
+            val badPasswordException = assertFails {
+                ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
+            }
+            assert(badPasswordException.localizedMessage == "ssks password cannot find identity with this id/password combination")
+            val retrieveNewPassword = ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, newPassword)
             assert(retrieveNewPassword.contentEquals(dummyIdentity))
 
             // Test with raw keys
@@ -480,11 +491,11 @@ class MainActivity : AppCompatActivity() {
             assert(retrievedNotAuth.shouldRenewKey)
             assert(retrievedNotAuth.identity.contentEquals(dummyIdentity))
 
-            // If initial key has been saved without being fully authenticate, you should renew the user's private key, and save then again.
+            // If initial key has been saved without being fully authenticated, you should renew the user's private key, and save it again.
             // sdk.renewKeys(Duration.ofDays(365 * 5))
 
             val identitySecondKey =
-                randomString(10).toByteArray() // should be the result of: sdk.exportIdentity()
+                randomByteArray(10) // should be the result of: sdk.exportIdentity()
             ssksPlugin.saveIdentityAsync(
                 chall.sessionId,
                 authFactor = authFactor,
@@ -499,7 +510,7 @@ class MainActivity : AppCompatActivity() {
             ).await()
             assert(secondChallenge.mustAuthenticate)
             val retrievedSecondKey = ssksPlugin.retrieveIdentityAsync(
-                chall.sessionId,
+                secondChallenge.sessionId,
                 authFactor = authFactor,
                 challenge = ssksTmrChallenge,
                 rawTMRSymKey = rawTMRSymKey
@@ -522,12 +533,4 @@ class MainActivity : AppCompatActivity() {
         }
         return true
     }
-}
-
-fun randomString(length: Int): String {
-    val chars = "abcdefghijklmnopqrstuvwxyz"
-    val random = Random()
-    return (1..length)
-        .map { chars[random.nextInt(chars.length)] }
-        .joinToString("")
 }

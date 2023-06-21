@@ -1,15 +1,21 @@
 package io.seald.seald_sdk_demo_app_android
 
-import android.util.Log
 import io.seald.seald_sdk.AuthFactor
 import kotlinx.coroutines.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+
+@Serializable
+data class AuthFactorJson(val type: String, val value: String)
+
+@Serializable
+data class ChallengeSendJson(val user_id: String, val auth_factor: AuthFactorJson, val create_user: Boolean, val force_auth: Boolean)
 
 class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
     private val keyStorageURL: String
@@ -52,19 +58,8 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
     }
 
     fun ChallengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): Deferred<ChallengeSendResponse> = CoroutineScope(Dispatchers.Default).async {
-        val jsonObject = """
-    {
-        "user_id": "$userId",
-        "auth_factor": {
-            "type": "${authFactor.type}",
-            "value": "${authFactor.value}"
-        },
-        "create_user": "$createUser",
-        "force_auth": "$forceAuth"
-    }
-""".trimIndent()
-
-        val resp = post("tmr/back/challenge_send/", jsonObject.toRequestBody(mediaType))
+        val body = ChallengeSendJson(userId, AuthFactorJson(authFactor.type.value, authFactor.value),createUser, forceAuth)
+        val resp = post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
         return@async Json.decodeFromString(resp)
     }
 }
