@@ -24,8 +24,7 @@ const val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8
 // The Seald SDK uses a local database that will persist on disk.
 // When instantiating a SealdSDK, it is highly recommended to set a symmetric key to encrypt this database.
 // This demo will use a fixed key. It should be generated at signup, and retrieved from your backend at login.
-const val databaseEncryptionKeyB64 =
-    "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
+const val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
 
 const val ssksURL = "https://ssks.soyouz.seald.io/"
 const val ssksBackendAppId = "00000000-0000-0000-0000-000000000001"
@@ -167,9 +166,9 @@ class MainActivity : AppCompatActivity() {
             sdk3.setGroupAdminsAsync(groupId, arrayOf(), arrayOf(user1AccountInfo.userId))
 
             // Create encryption session: https://docs.seald.io/sdk/guides/6-encryption-sessions.html
+            // user1, user2, and group as recipients
             val recipient = arrayOf(user1AccountInfo.userId, user2AccountInfo.userId, groupId)
             val es1SDK1 = sdk1.createEncryptionSessionAsync(recipient)
-                 // user1, user2, and group as recipients
 
             // The io.seald.seald_sdk.EncryptionSession object can encrypt and decrypt for user1
             val initialString = "a message that needs to be encrypted!"
@@ -198,10 +197,8 @@ class MainActivity : AppCompatActivity() {
             assert(fileContent == decryptedFile.readText())
 
             // user1 can retrieve the EncryptionSession from the encrypted message
-            val es1SDK1RetrieveFromMess =
-                sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
-            val decryptedMessageFromMess =
-                es1SDK1RetrieveFromMess.decryptMessageAsync(encryptedMessage)
+            val es1SDK1RetrieveFromMess = sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
+            val decryptedMessageFromMess = es1SDK1RetrieveFromMess.decryptMessageAsync(encryptedMessage)
             assert(initialString == decryptedMessageFromMess)
 
             // user2 and user3 can retrieve the encryptionSession (from the encrypted message or the session ID).
@@ -209,8 +206,7 @@ class MainActivity : AppCompatActivity() {
             val decryptedMessageSDK2 = es1SDK2.decryptMessageAsync(encryptedMessage)
             assert(initialString == decryptedMessageSDK2)
 
-            val es1SDK3FromGroup =
-                sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
+            val es1SDK3FromGroup = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
             val decryptedMessageSDK3 = es1SDK3FromGroup.decryptMessageAsync(encryptedMessage)
             assert(initialString == decryptedMessageSDK3)
 
@@ -269,16 +265,14 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Create additional data for user1
-            val es2SDK1 =
-                sdk1.createEncryptionSessionAsync(arrayOf(user1AccountInfo.userId), true)
+            val es2SDK1 = sdk1.createEncryptionSessionAsync(arrayOf(user1AccountInfo.userId), true)
             val anotherMessage = "nobody should read that!"
             val secondEncryptedMessage = es2SDK1.encryptMessageAsync(anotherMessage)
 
             // user1 can renew its key, and still decrypt old messages
             sdk1.renewKeys(Duration.ofDays(365 * 5))
             val es2SDK1AfterRenew = sdk1.retrieveEncryptionSessionAsync(es2SDK1.sessionId, false)
-            val decryptedMessageAfterRenew =
-                es2SDK1AfterRenew.decryptMessageAsync(secondEncryptedMessage)
+            val decryptedMessageAfterRenew = es2SDK1AfterRenew.decryptMessageAsync(secondEncryptedMessage)
             assert(anotherMessage == decryptedMessageAfterRenew)
 
             // CONNECTORS https://docs.seald.io/en/sdk/guides/jwt.html#adding-a-userid
@@ -303,8 +297,7 @@ class MainActivity : AppCompatActivity() {
             assert(retrieveConnector.value == "${customConnectorJWTValue}@${appId}")
 
             // Retrieve connectors from a user id.
-            val connectorsFromSealdId =
-                sdk1.getConnectorsFromSealdIdAsync(user1AccountInfo.userId)
+            val connectorsFromSealdId = sdk1.getConnectorsFromSealdIdAsync(user1AccountInfo.userId)
             assert(connectorsFromSealdId.size == 1)
             assert(connectorsFromSealdId[0].state == io.seald.seald_sdk.ConnectorState.VALIDATED)
             assert(connectorsFromSealdId[0].type == io.seald.seald_sdk.ConnectorType.AP)
@@ -345,10 +338,8 @@ class MainActivity : AppCompatActivity() {
             sdk1Exported.importIdentityAsync(exportIdentity)
 
             // SDK with imported identity can decrypt
-            val es2SDK1Exported =
-                sdk1Exported.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage)
-            val clearMessageExportedIdentity =
-                es2SDK1Exported.decryptMessageAsync(secondEncryptedMessage)
+            val es2SDK1Exported = sdk1Exported.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage)
+            val clearMessageExportedIdentity = es2SDK1Exported.decryptMessageAsync(secondEncryptedMessage)
             assert(anotherMessage == clearMessageExportedIdentity)
 
             // user1 can create sub identity
@@ -369,11 +360,9 @@ class MainActivity : AppCompatActivity() {
             sdk1SubDevice.importIdentityAsync(subIdentity.backupKey)
 
             // sub device can decrypt
-            val es2SDK1SubDevice =
-                sdk1SubDevice.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage, false)
+            val es2SDK1SubDevice = sdk1SubDevice.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage, false)
 
-            val clearMessageSubdIdentity =
-                es2SDK1SubDevice.decryptMessageAsync(secondEncryptedMessage)
+            val clearMessageSubdIdentity = es2SDK1SubDevice.decryptMessageAsync(secondEncryptedMessage)
             assert(anotherMessage == clearMessageSubdIdentity)
 
             sdk1.heartbeatAsync()
@@ -398,8 +387,7 @@ class MainActivity : AppCompatActivity() {
             val ssksPlugin = SealdSSKSPasswordPlugin(ssksURL, appId)
 
             ssksPlugin.saveIdentityFromPasswordAsync(userIdPassword, userPassword, dummyIdentity)
-            val retrievedIdentity =
-                ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
+            val retrievedIdentity = ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
             assert(retrievedIdentity.contentEquals(dummyIdentity))
 
             val newPassword = "newPassword"
@@ -494,8 +482,7 @@ class MainActivity : AppCompatActivity() {
             // If initial key has been saved without being fully authenticated, you should renew the user's private key, and save it again.
             // sdk.renewKeys(Duration.ofDays(365 * 5))
 
-            val identitySecondKey =
-                randomByteArray(10) // should be the result of: sdk.exportIdentity()
+            val identitySecondKey = randomByteArray(10) // should be the result of: sdk.exportIdentity()
             ssksPlugin.saveIdentityAsync(
                 chall.sessionId,
                 authFactor = authFactor,
@@ -520,7 +507,7 @@ class MainActivity : AppCompatActivity() {
 
             val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
             val inst2Retrieve = ssksPluginInst2.retrieveIdentity(
-                chall.sessionId,
+                secondChallenge.sessionId,
                 authFactor = authFactor,
                 challenge = ssksTmrChallenge,
                 rawTMRSymKey = rawTMRSymKey
