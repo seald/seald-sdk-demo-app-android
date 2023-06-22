@@ -506,8 +506,14 @@ class MainActivity : AppCompatActivity() {
             assert(retrievedSecondKey.identity.contentEquals(identitySecondKey))
 
             val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
+            val thirdChallenge = yourCompanyDummyBackend.ChallengeSend(
+                userId, authFactor,
+                createUser = false,
+                forceAuth = false
+            ).await()
+            assert(thirdChallenge.mustAuthenticate)
             val inst2Retrieve = ssksPluginInst2.retrieveIdentity(
-                secondChallenge.sessionId,
+                thirdChallenge.sessionId,
                 authFactor = authFactor,
                 challenge = ssksTmrChallenge,
                 rawTMRSymKey = rawTMRSymKey
