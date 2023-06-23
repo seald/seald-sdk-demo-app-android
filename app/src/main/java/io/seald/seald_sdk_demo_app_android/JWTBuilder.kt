@@ -4,7 +4,7 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import io.jsonwebtoken.security.Keys
 import java.util.*
-import javax.crypto.SecretKey;
+import javax.crypto.SecretKey
 
 class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
     private val JWTSharedSecretId: String
