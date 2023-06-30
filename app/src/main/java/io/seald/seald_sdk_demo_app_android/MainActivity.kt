@@ -536,12 +536,12 @@ class MainActivity : AppCompatActivity() {
 
             // Let's simulate the renew with another random identity
             val identitySecondKey = randomByteArray(10) // should be the result of: sdk.exportIdentity()
-            ssksPlugin.saveIdentityAsync(
+            ssksPlugin.saveIdentityAsync( // to save the newly renewed identity, you can use the `authenticatedSessionId` from the response to `retrieveIdentityAsync`, with no challenge
                 retrievedNotAuth.authenticatedSessionId,
                 authFactor = authFactor,
                 rawTMRSymKey = rawTMRSymKey,
                 identity = identitySecondKey,
-                challenge = ssksTmrChallenge
+                challenge = ""
             )
 
             // And now let's retrieve this new saved identity
