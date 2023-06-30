@@ -9,7 +9,7 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.time.Duration
 import java.util.*
-import javax.crypto.KeyGenerator
+import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
 
@@ -80,7 +80,7 @@ class MainActivity : AppCompatActivity() {
                     resultView.text = "test SDK: ${if (result) "success" else "error"}"
                 }
             }
-            val testSSKSTMRResult = async {
+            val testSSKSPasswordResult = async {
                 val resultView: TextView = findViewById(R.id.testSsksPassword)
                 withContext(Dispatchers.Main) { resultView.text = "test SSKS Password: Running..." }
                 val result = testSSKSPassword()
@@ -88,7 +88,7 @@ class MainActivity : AppCompatActivity() {
                     resultView.text = "test SSKS Password: ${if (result) "success" else "error"}"
                 }
             }
-            val testSSKSPasswordResult = async {
+            val testSSKSTMRResult = async {
                 val resultView: TextView = findViewById(R.id.testSsksTMR)
                 withContext(Dispatchers.Main) { resultView.text = "test SSKS TMR: Running..." }
                 val result = testSSKSTMR()
@@ -371,48 +371,70 @@ class MainActivity : AppCompatActivity() {
             sdk1.close()
             sdk2.close()
             sdk3.close()
-        } catch (e: java.lang.Error) {
-            println(e.printStackTrace())
-            return false
+
+            println("SDK tests success!")
+            return true
+        } catch (e: Throwable) {
+            when (e) {
+                is AssertionError, is Exception -> {
+                    println("SDK tests failed")
+                    println(e.printStackTrace())
+                    return false
+                }
+                else -> {
+                    println("Fatal error in SDK tests")
+                    println(e.printStackTrace())
+                    throw e
+                }
+            }
         }
-        return true
     }
 
     private suspend fun testSSKSPassword(): Boolean {
         try {
-            // Test with standard password
-            val userIdPassword = "user-${randomString(10)}" // should be: AccountInfo.userId
-            val userPassword = randomString(10)
+            // Simulating a Seald identity with random data, for a simpler example.
             val dummyIdentity = randomByteArray(10)
             val ssksPlugin = SealdSSKSPasswordPlugin(ssksURL, appId)
 
+            // Test with password
+            val userIdPassword = "user-${randomString(10)}" // should be: AccountInfo.userId
+            val userPassword = randomString(10)
+
+            // Saving the identity with a password
             ssksPlugin.saveIdentityFromPasswordAsync(userIdPassword, userPassword, dummyIdentity)
+
+            // Retrieving the identity with the password
             val retrievedIdentity = ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
             assert(retrievedIdentity.contentEquals(dummyIdentity))
 
+            // Changing the password
             val newPassword = "newPassword"
             ssksPlugin.changeIdentityPasswordAsync(userIdPassword, userPassword, newPassword)
+
+            // The previous password does not work anymore
             val badPasswordException = assertFails {
                 ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
             }
             assert(badPasswordException.localizedMessage == "ssks password cannot find identity with this id/password combination")
+
+            // Retrieving with the new password works
             val retrieveNewPassword = ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, newPassword)
             assert(retrieveNewPassword.contentEquals(dummyIdentity))
 
             // Test with raw keys
             val userIdRawKeys = "user-${randomString(10)}"
-            val keyGenerator = KeyGenerator.getInstance("AES")
-            keyGenerator.init(64 * 8) // Key length in bits
-
-            val rawEncryptionKey = keyGenerator.generateKey().encoded
+            val rawEncryptionKey = randomByteArray(64)
             val rawStorageKey = randomString(32)
 
+            // Saving identity with raw keys
             ssksPlugin.saveIdentityFromRawKeysAsync(
                 userIdRawKeys,
                 rawStorageKey,
                 rawEncryptionKey,
                 dummyIdentity
             )
+
+            // Retrieving the identity with raw keys
             val retrievedFromRawKeys = ssksPlugin.retrieveIdentityFromRawKeysAsync(
                 userIdRawKeys,
                 rawStorageKey,
@@ -420,6 +442,7 @@ class MainActivity : AppCompatActivity() {
             )
             assert(retrievedFromRawKeys.contentEquals(dummyIdentity))
 
+            // Deleting the identity by saving an empty `Data`
             ssksPlugin.saveIdentityFromRawKeysAsync(
                 userIdRawKeys,
                 rawStorageKey,
@@ -427,6 +450,7 @@ class MainActivity : AppCompatActivity() {
                 ByteArray(0)
             )
 
+            // After deleting the identity, cannot retrieve anymore
             val exception = assertFails {
                 ssksPlugin.retrieveIdentityFromRawKeysAsync(
                     userIdRawKeys,
@@ -435,76 +459,109 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             assert(exception.localizedMessage == "ssks password cannot find identity with this id/password combination")
-        } catch (e: java.lang.Error) {
-            println(e.printStackTrace())
-            return false
+
+            println("SSKS Password tests success!")
+            return true
+        } catch (e: Throwable) {
+            when (e) {
+                is AssertionError, is Exception -> {
+                    println("SSKS Password tests failed")
+                    println(e.printStackTrace())
+                    return false
+                }
+                else -> {
+                    println("Fatal error in SSKS Password tests")
+                    println(e.printStackTrace())
+                    throw e
+                }
+            }
         }
-        return true
     }
 
     private suspend fun testSSKSTMR(): Boolean {
         try {
-            val keyGenerator = KeyGenerator.getInstance("AES")
-            keyGenerator.init(64 * 8) // Key length in bits
-            val rawTMRSymKey = keyGenerator.generateKey().encoded
+            val rawTMRSymKey = randomByteArray(64)
 
             val yourCompanyDummyBackend = SSKSbackend(ssksURL, ssksBackendAppId, ssksBackendAppKey)
+            val ssksPlugin = SealdSSKSTmrPlugin(ssksURL, appId)
 
-            // We will be using dummy value for demo.
+            // Simulating a Seald identity with random data, for a simpler example.
             val userId = "user-${randomString(11)}" // should be: AccountInfo.userId
-            val dummyIdentity = randomString(11).toByteArray() // should be: sdk.exportIdentity()
+            val dummyIdentity = randomByteArray(10) // should be: sdk.exportIdentity()
 
             val userEM = "email-${randomString(15)}@test.com"
+
+            // The app backend creates a session to save the identity.
+            // This is the first time that this email is storing an identity, so `must_authenticate` is false.
             val authFactor = AuthFactor(AuthFactorType.EM, userEM)
-            val chall = yourCompanyDummyBackend.ChallengeSend(
-                userId, authFactor,
+            val authSessionSave = yourCompanyDummyBackend.ChallengeSend(
+                userId,
+                authFactor,
                 createUser = true,
                 forceAuth = false
             ).await()
+            assertEquals(authSessionSave.mustAuthenticate, false)
 
-            val ssksPlugin = SealdSSKSTmrPlugin(ssksURL, appId)
+            // Saving the identity. No challenge necessary because `must_authenticate` is false.
             ssksPlugin.saveIdentityAsync(
-                chall.sessionId,
+                authSessionSave.sessionId,
                 authFactor = authFactor,
                 rawTMRSymKey = rawTMRSymKey,
                 identity = dummyIdentity,
                 challenge = ""
             )
+
+            // The app backend creates another session to retrieve the identity.
+            // The identity is already saved, so `must_authenticate` is true.
+            val authSessionRetrieve = yourCompanyDummyBackend.ChallengeSend(
+                userId,
+                authFactor,
+                createUser = true,
+                forceAuth = false
+            ).await()
+            assertEquals(authSessionRetrieve.mustAuthenticate, true)
+
+            // Retrieving identity. Challenge is necessary for this.
             val retrievedNotAuth = ssksPlugin.retrieveIdentityAsync(
-                chall.sessionId,
+                authSessionRetrieve.sessionId,
                 authFactor = authFactor,
                 challenge = ssksTmrChallenge,
                 rawTMRSymKey = rawTMRSymKey
             )
-            assert(retrievedNotAuth.shouldRenewKey)
+            assertEquals(retrievedNotAuth.shouldRenewKey, true)
             assert(retrievedNotAuth.identity.contentEquals(dummyIdentity))
 
             // If initial key has been saved without being fully authenticated, you should renew the user's private key, and save it again.
             // sdk.renewKeys(Duration.ofDays(365 * 5))
 
+            // Let's simulate the renew with another random identity
             val identitySecondKey = randomByteArray(10) // should be the result of: sdk.exportIdentity()
             ssksPlugin.saveIdentityAsync(
-                chall.sessionId,
+                retrievedNotAuth.authenticatedSessionId,
                 authFactor = authFactor,
                 rawTMRSymKey = rawTMRSymKey,
                 identity = identitySecondKey,
                 challenge = ssksTmrChallenge
             )
-            val secondChallenge = yourCompanyDummyBackend.ChallengeSend(
-                userId, authFactor,
+
+            // And now let's retrieve this new saved identity
+            val authSessionRetrieve2 = yourCompanyDummyBackend.ChallengeSend(
+                userId,
+                authFactor,
                 createUser = false,
                 forceAuth = false
             ).await()
-            assert(secondChallenge.mustAuthenticate)
+            assertEquals(authSessionRetrieve2.mustAuthenticate, true)
             val retrievedSecondKey = ssksPlugin.retrieveIdentityAsync(
-                secondChallenge.sessionId,
+                authSessionRetrieve2.sessionId,
                 authFactor = authFactor,
                 challenge = ssksTmrChallenge,
                 rawTMRSymKey = rawTMRSymKey
             )
-            assert(!retrievedSecondKey.shouldRenewKey)
+            assertEquals(retrievedSecondKey.shouldRenewKey, false)
             assert(retrievedSecondKey.identity.contentEquals(identitySecondKey))
 
+            // Try retrieving with another SealdSsksTMRPlugin instance
             val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
             val thirdChallenge = yourCompanyDummyBackend.ChallengeSend(
                 userId, authFactor,
@@ -520,10 +577,22 @@ class MainActivity : AppCompatActivity() {
             )
             assert(!inst2Retrieve.shouldRenewKey)
             assert(inst2Retrieve.identity.contentEquals(identitySecondKey))
-        } catch (e: java.lang.Error) {
-            println(e.printStackTrace())
-            return false
+
+            println("SSKS TMR tests success!")
+            return true
+        } catch (e: Throwable) {
+            when (e) {
+                is AssertionError, is Exception -> {
+                    println("SSKS TMR tests failed")
+                    println(e.printStackTrace())
+                    return false
+                }
+                else -> {
+                    println("Fatal TMR in SSKS Password tests")
+                    println(e.printStackTrace())
+                    throw e
+                }
+            }
         }
-        return true
     }
 }

@@ -26,6 +26,8 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
     private val httpClient: OkHttpClient
     private val mediaType  = "application/json; charset=utf-8".toMediaType()
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     init {
         this.keyStorageURL = keyStorageURL
         this.appId = appId
@@ -60,7 +62,7 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
     fun ChallengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): Deferred<ChallengeSendResponse> = CoroutineScope(Dispatchers.Default).async {
         val body = ChallengeSendJson(userId, AuthFactorJson(authFactor.type.value, authFactor.value),createUser, forceAuth)
         val resp = post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
-        return@async Json.decodeFromString(resp)
+        return@async json.decodeFromString(resp)
     }
 }
 

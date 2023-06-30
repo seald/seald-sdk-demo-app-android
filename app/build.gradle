@@ -49,6 +49,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.5.1")
 
     // Seald SDK
-    implementation files('libs/seald-sdk-internals-52543.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-52543.aar
-    implementation files('libs/seald-sdk-52543.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-52543.aar
+    implementation files('libs/seald-sdk-internals-53083.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-internals-53083.aar
+    implementation files('libs/seald-sdk-53083.aar') // https://api-dev.soyouz.seald.io/go-seald-sdk/android/seald-sdk-53083.aar
 }
