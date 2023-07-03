@@ -23,7 +23,9 @@ const val JWTSharedSecret = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8
 
 // The Seald SDK uses a local database that will persist on disk.
 // When instantiating a SealdSDK, it is highly recommended to set a symmetric key to encrypt this database.
-// This demo will use a fixed key. It should be generated at signup, and retrieved from your backend at login.
+// This demo will use a fixed key. In an actual app, it should be generated at signup,
+// either on the server and retrieved from your backend at login,
+// or on the client-side directly and stored in the system's keychain.
 const val databaseEncryptionKeyB64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
 
 const val ssksURL = "https://ssks.soyouz.seald.io/"
@@ -563,14 +565,14 @@ class MainActivity : AppCompatActivity() {
 
             // Try retrieving with another SealdSsksTMRPlugin instance
             val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
-            val thirdChallenge = yourCompanyDummyBackend.ChallengeSend(
+            val authSessionRetrieve3 = yourCompanyDummyBackend.ChallengeSend(
                 userId, authFactor,
                 createUser = false,
                 forceAuth = false
             ).await()
-            assert(thirdChallenge.mustAuthenticate)
+            assert(authSessionRetrieve3.mustAuthenticate)
             val inst2Retrieve = ssksPluginInst2.retrieveIdentity(
-                thirdChallenge.sessionId,
+                authSessionRetrieve3.sessionId,
                 authFactor = authFactor,
                 challenge = ssksTmrChallenge,
                 rawTMRSymKey = rawTMRSymKey
