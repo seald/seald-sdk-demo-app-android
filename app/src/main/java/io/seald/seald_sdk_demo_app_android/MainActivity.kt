@@ -74,34 +74,31 @@ class MainActivity : AppCompatActivity() {
         val jwtBuilder = JWTBuilder(JWTSharedSecretId, JWTSharedSecret)
 
         CoroutineScope(Dispatchers.Default).launch {
-            val testSDKResult = async {
-                val resultView: TextView = findViewById(R.id.testSDK)
-                withContext(Dispatchers.Main) { resultView.text = "test SDK: Running..." }
-                val result = testSDK(path, jwtBuilder)
-                withContext(Dispatchers.Main) {
-                    resultView.text = "test SDK: ${if (result) "success" else "error"}"
-                }
+            // SDK
+            val sdkResultView: TextView = findViewById(R.id.testSDK)
+            withContext(Dispatchers.Main) { sdkResultView.text = "test SDK: Running..." }
+            val sdkResult = testSDK(path, jwtBuilder)
+            withContext(Dispatchers.Main) {
+                sdkResultView.text = "test SDK: ${if (sdkResult) "success" else "error"}"
             }
-            val testSSKSPasswordResult = async {
-                val resultView: TextView = findViewById(R.id.testSsksPassword)
-                withContext(Dispatchers.Main) { resultView.text = "test SSKS Password: Running..." }
-                val result = testSSKSPassword()
-                withContext(Dispatchers.Main) {
-                    resultView.text = "test SSKS Password: ${if (result) "success" else "error"}"
-                }
+            // SSKS Password
+            val ssksPasswordResultView: TextView = findViewById(R.id.testSsksPassword)
+            withContext(Dispatchers.Main) {
+                ssksPasswordResultView.text = "test SSKS Password: Running..."
             }
-            val testSSKSTMRResult = async {
-                val resultView: TextView = findViewById(R.id.testSsksTMR)
-                withContext(Dispatchers.Main) { resultView.text = "test SSKS TMR: Running..." }
-                val result = testSSKSTMR()
-                withContext(Dispatchers.Main) {
-                    resultView.text = "test SSKS TMR: ${if (result) "success" else "error"}"
-                }
+            val ssksPasswordResult = testSSKSPassword()
+            withContext(Dispatchers.Main) {
+                ssksPasswordResultView.text =
+                    "test SSKS Password: ${if (ssksPasswordResult) "success" else "error"}"
             }
-
-            testSDKResult.await()
-            testSSKSTMRResult.await()
-            testSSKSPasswordResult.await()
+            // SSKS TMR
+            val ssksTmrResultView: TextView = findViewById(R.id.testSsksTMR)
+            withContext(Dispatchers.Main) { ssksTmrResultView.text = "test SSKS TMR: Running..." }
+            val ssksTmrResult = testSSKSTMR()
+            withContext(Dispatchers.Main) {
+                ssksTmrResultView.text =
+                    "test SSKS TMR: ${if (ssksTmrResult) "success" else "error"}"
+            }
         }
     }
 
@@ -496,7 +493,7 @@ class MainActivity : AppCompatActivity() {
             // The app backend creates a session to save the identity.
             // This is the first time that this email is storing an identity, so `must_authenticate` is false.
             val authFactor = AuthFactor(AuthFactorType.EM, userEM)
-            val authSessionSave = yourCompanyDummyBackend.ChallengeSend(
+            val authSessionSave = yourCompanyDummyBackend.challengeSend(
                 userId,
                 authFactor,
                 createUser = true,
@@ -515,7 +512,7 @@ class MainActivity : AppCompatActivity() {
 
             // The app backend creates another session to retrieve the identity.
             // The identity is already saved, so `must_authenticate` is true.
-            val authSessionRetrieve = yourCompanyDummyBackend.ChallengeSend(
+            val authSessionRetrieve = yourCompanyDummyBackend.challengeSend(
                 userId,
                 authFactor,
                 createUser = true,
@@ -547,7 +544,7 @@ class MainActivity : AppCompatActivity() {
             )
 
             // And now let's retrieve this new saved identity
-            val authSessionRetrieve2 = yourCompanyDummyBackend.ChallengeSend(
+            val authSessionRetrieve2 = yourCompanyDummyBackend.challengeSend(
                 userId,
                 authFactor,
                 createUser = false,
@@ -565,7 +562,7 @@ class MainActivity : AppCompatActivity() {
 
             // Try retrieving with another SealdSsksTMRPlugin instance
             val ssksPluginInst2 = SealdSSKSTmrPlugin(ssksURL, appId)
-            val authSessionRetrieve3 = yourCompanyDummyBackend.ChallengeSend(
+            val authSessionRetrieve3 = yourCompanyDummyBackend.challengeSend(
                 userId, authFactor,
                 createUser = false,
                 forceAuth = false

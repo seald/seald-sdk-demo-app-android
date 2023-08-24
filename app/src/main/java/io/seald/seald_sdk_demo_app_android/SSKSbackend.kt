@@ -59,7 +59,7 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
 
     }
 
-    fun ChallengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): Deferred<ChallengeSendResponse> = CoroutineScope(Dispatchers.Default).async {
+    fun challengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): Deferred<ChallengeSendResponse> = CoroutineScope(Dispatchers.Default).async {
         val body = ChallengeSendJson(userId, AuthFactorJson(authFactor.type.value, authFactor.value),createUser, forceAuth)
         val resp = post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
         return@async json.decodeFromString(resp)
