@@ -218,9 +218,10 @@ class MainActivity : AppCompatActivity() {
             // user3 could retrieve the previous encryption session only because "group-1" was set as recipient.
             // As the group was deleted, it can no longer access it.
             // user3 still has the encryption session in its cache, but we can disable it.
-            assertFails {
+            var exception = assertFails {
                 sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
-            }
+            } as SealdException
+            assert(exception.status == 404)
 
             // user2 adds user3 as recipient of the encryption session.
             val respAdd = es1SDK2.addRecipientsAsync(arrayOf(user3AccountInfo.userId))
@@ -239,9 +240,10 @@ class MainActivity : AppCompatActivity() {
             assert(respRevoke[user3AccountInfo.userId]!!.success)
 
             // user3 cannot retrieve the session anymore
-            assertFails {
+            exception = assertFails {
                 sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
-            }
+            } as SealdException
+            assert(exception.status == 404)
 
             // user1 revokes all other recipients from the session
             val respRevokeOther = es1SDK1.revokeOthersAsync()
@@ -250,18 +252,20 @@ class MainActivity : AppCompatActivity() {
             assert(respRevokeOther[user2AccountInfo.userId]!!.success)
 
             // user2 cannot retrieve the session anymore
-            assertFails {
+            exception = assertFails {
                 sdk2.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
-            }
+            } as SealdException
+            assert(exception.status == 404)
 
             // user1 revokes all. It can no longer retrieve it.
             val respRevokeAll = es1SDK1.revokeAllAsync()
             assert(respRevokeAll.size == 1) // only user1 is left
             assert(respRevokeAll[user1AccountInfo.userId]!!.success)
 
-            assertFails {
+            exception = assertFails {
                 sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
-            }
+            } as SealdException
+            assert(exception.status == 404)
 
             // Create additional data for user1
             val es2SDK1 = sdk1.createEncryptionSessionAsync(arrayOf(user1AccountInfo.userId), true)
@@ -413,8 +417,8 @@ class MainActivity : AppCompatActivity() {
             // The previous password does not work anymore
             val badPasswordException = assertFails {
                 ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, userPassword)
-            }
-            assert(badPasswordException.localizedMessage == "ssks password cannot find identity with this id/password combination")
+            } as SealdException
+            assert(badPasswordException.code == "SSKSPASSWORD_CANNOT_FIND_IDENTITY")
 
             // Retrieving with the new password works
             val retrieveNewPassword = ssksPlugin.retrieveIdentityFromPasswordAsync(userIdPassword, newPassword)
@@ -456,8 +460,8 @@ class MainActivity : AppCompatActivity() {
                     rawStorageKey,
                     rawEncryptionKey
                 )
-            }
-            assert(exception.localizedMessage == "ssks password cannot find identity with this id/password combination")
+            } as SealdException
+            assert(exception.code == "SSKSPASSWORD_CANNOT_FIND_IDENTITY")
 
             println("SSKS Password tests success!")
             return true
