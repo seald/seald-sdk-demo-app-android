@@ -48,6 +48,5 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
 
-    implementation 'io.seald:seald_sdk_android:0.3.0-beta.0'
-    // implementation files('libs/seald_sdk-release.aar')
+    implementation 'io.seald:seald_sdk_android:0.4.0-beta.0'
 }

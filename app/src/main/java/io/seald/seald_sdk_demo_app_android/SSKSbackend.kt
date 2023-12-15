@@ -24,7 +24,7 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
 
     // Http client
     private val httpClient: OkHttpClient
-    private val mediaType  = "application/json; charset=utf-8".toMediaType()
+    private val mediaType = "application/json; charset=utf-8".toMediaType()
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -36,13 +36,17 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
         this.httpClient = OkHttpClient()
     }
 
-    private fun post(endpoint: String, requestBody: RequestBody): String {
-        val request = Request.Builder()
-            .url(keyStorageURL + endpoint)
-            .addHeader("X-SEALD-APPID", this.appId)
-            .addHeader("X-SEALD-APIKEY", this.appKey)
-            .post(requestBody)
-            .build()
+    private fun post(
+        endpoint: String,
+        requestBody: RequestBody,
+    ): String {
+        val request =
+            Request.Builder()
+                .url(keyStorageURL + endpoint)
+                .addHeader("X-SEALD-APPID", this.appId)
+                .addHeader("X-SEALD-APIKEY", this.appKey)
+                .post(requestBody)
+                .build()
 
         println("SSKSbackend POST URL: ${keyStorageURL + endpoint}")
         val response = httpClient.newCall(request).execute()
@@ -56,14 +60,19 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
             println("Response body: $responseBody")
             return responseBody as String
         }
-
     }
 
-    fun challengeSend(userId: String, authFactor: AuthFactor, createUser: Boolean, forceAuth: Boolean): Deferred<ChallengeSendResponse> = CoroutineScope(Dispatchers.Default).async {
-        val body = ChallengeSendJson(userId, AuthFactorJson(authFactor.type.value, authFactor.value),createUser, forceAuth)
-        val resp = post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
-        return@async json.decodeFromString(resp)
-    }
+    fun challengeSend(
+        userId: String,
+        authFactor: AuthFactor,
+        createUser: Boolean,
+        forceAuth: Boolean,
+    ): Deferred<ChallengeSendResponse> =
+        CoroutineScope(Dispatchers.Default).async {
+            val body = ChallengeSendJson(userId, AuthFactorJson(authFactor.type.value, authFactor.value), createUser, forceAuth)
+            val resp = post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
+            return@async json.decodeFromString(resp)
+        }
 }
 
 @Serializable

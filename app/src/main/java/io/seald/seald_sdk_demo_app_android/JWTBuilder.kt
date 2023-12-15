@@ -6,13 +6,13 @@ import io.jsonwebtoken.security.Keys
 import java.util.*
 import javax.crypto.SecretKey
 
-class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
-    private val JWTSharedSecretId: String
-    private val JWTSharedSecret: SecretKey
+class JWTBuilder(jwtSharedSecretId: String, jwtSharedSecret: String) {
+    private val jwtSharedSecretId: String
+    private val jwtSharedSecret: SecretKey
 
     init {
-        this.JWTSharedSecretId = JWTSharedSecretId
-        this.JWTSharedSecret = Keys.hmacShaKeyFor(JWTSharedSecret.toByteArray())
+        this.jwtSharedSecretId = jwtSharedSecretId
+        this.jwtSharedSecret = Keys.hmacShaKeyFor(jwtSharedSecret.toByteArray())
     }
 
     enum class JWTPermission(val perm: Int) {
@@ -34,14 +34,17 @@ class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
             .claim("join_team", true)
             .claim("scopes", JWTPermission.JOIN_TEAM)
             .setId(UUID.randomUUID().toString())
-            .setIssuer(JWTSharedSecretId)
+            .setIssuer(jwtSharedSecretId)
             .setIssuedAt(date)
             .setExpiration(expiryDate)
-            .signWith(JWTSharedSecret, SignatureAlgorithm.HS256)
+            .signWith(jwtSharedSecret, SignatureAlgorithm.HS256)
             .compact()
     }
 
-    fun connectorJWT(customUserId: String, appId: String): String {
+    fun connectorJWT(
+        customUserId: String,
+        appId: String,
+    ): String {
         val date = Date()
         val expiryDate = Date(date.time + 2 * 60 * 60 * 1000)
 
@@ -50,12 +53,11 @@ class JWTBuilder(JWTSharedSecretId: String, JWTSharedSecret: String) {
             .setHeaderParam("typ", "JWT")
             .claim("scopes", JWTPermission.ADD_CONNECTOR)
             .claim("connector_add", mapOf("type" to "AP", "value" to "$customUserId@$appId"))
-            .setIssuer(JWTSharedSecretId)
+            .setIssuer(jwtSharedSecretId)
             .setId(UUID.randomUUID().toString())
             .setIssuedAt(date)
             .setExpiration(expiryDate)
-            .signWith(JWTSharedSecret, SignatureAlgorithm.HS256)
+            .signWith(jwtSharedSecret, SignatureAlgorithm.HS256)
             .compact()
     }
-
 }
