@@ -15,7 +15,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 data class AuthFactorJson(val type: String, val value: String)
 
 @Serializable
-data class ChallengeSendJson(val user_id: String, val auth_factor: AuthFactorJson, val create_user: Boolean, val force_auth: Boolean)
+data class ChallengeSendJson(
+    val user_id: String,
+    val auth_factor: AuthFactorJson,
+    val create_user: Boolean,
+    val force_auth: Boolean,
+    val fake_otp: Boolean,
+)
 
 class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
     private val keyStorageURL: String
@@ -67,10 +73,19 @@ class SSKSbackend(keyStorageURL: String, appId: String, appKey: String) {
         authFactor: AuthFactor,
         createUser: Boolean,
         forceAuth: Boolean,
+        fakeOtp: Boolean,
     ): Deferred<ChallengeSendResponse> =
         CoroutineScope(Dispatchers.Default).async {
-            val body = ChallengeSendJson(userId, AuthFactorJson(authFactor.type.value, authFactor.value), createUser, forceAuth)
-            val resp = post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
+            val body =
+                ChallengeSendJson(
+                    userId,
+                    AuthFactorJson(authFactor.type.value, authFactor.value),
+                    createUser,
+                    forceAuth,
+                    fakeOtp,
+                )
+            val resp =
+                post("tmr/back/challenge_send/", Json.encodeToString(body).toRequestBody(mediaType))
             return@async json.decodeFromString(resp)
         }
 }

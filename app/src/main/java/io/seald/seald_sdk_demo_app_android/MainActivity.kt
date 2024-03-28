@@ -13,25 +13,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
 
-// Seald account infos:
-// First step with Seald: https://docs.seald.io/en/sdk/guides/1-quick-start.html
-// Create a team here: https://www.seald.io/create-sdk
-const val API_URL = "https://api.staging-0.seald.io/"
-const val APP_ID = "1e2600a5-417e-4333-93a6-2b196781b0de"
-const val JWT_SHARED_SECRET_ID = "32b4e3db-300b-4916-90e6-0020639c3df0"
-const val JWT_SHARED_SECRET = "VstlqoxvQPAxRTDa6cAzWiQiqcgETNP8yYnNyhGWXaI6uS7X5t8csh1xYeLTjTTO"
-
 // The Seald SDK uses a local database that will persist on disk.
 // When instantiating a SealdSDK, it is highly recommended to set a symmetric key to encrypt this database.
 // This demo will use a fixed key. In an actual app, it should be generated at signup,
 // either on the server and retrieved from your backend at login,
 // or on the client-side directly and stored in the system's keychain.
 const val DATABASE_ENCRYPTION_KEY_B64 = "V4olGDOE5bAWNa9HDCvOACvZ59hUSUdKmpuZNyl1eJQnWKs5/l+PGnKUv4mKjivL3BtU014uRAIF2sOl83o6vQ"
-
-const val SSKS_URL = "https://ssks.soyouz.seald.io/"
-const val SSKS_BACKEND_APP_ID = "00000000-0000-0000-0000-000000000001"
-const val SSKS_BACKEND_APP_KEY = "00000000-0000-0000-0000-000000000002"
-const val SSKS_TMR_CHALLENGE = "aaaaaaaa"
 
 fun deleteRecursive(fileOrDirectory: File) {
     if (fileOrDirectory.isDirectory()) {
@@ -191,6 +178,67 @@ class MainActivity : AppCompatActivity() {
             val es1SDK1 = sdk1.createEncryptionSessionAsync(recipients)
             assert(es1SDK1.retrievalDetails.flow == EncryptionSessionRetrievalFlow.CREATED)
 
+            // Add TMR accesses to the session, then, retrieve the session using it.
+            // Create TMR a recipient
+            val authFactorValue = "tmr-em-kotlin-${randomString(5)}@test.com"
+            val tmrAuthFactor = AuthFactor(AuthFactorType.EM, authFactorValue)
+
+            // WARNING: This should be a cryptographically random buffer of 64 bytes. This random generation is NOT good enough.
+            val overEncryptionKey = randomByteArray(64)
+
+            val tmrRecipient = arrayOf(TmrRecipientWithRights(tmrAuthFactor, allRights, overEncryptionKey))
+
+            // Add the TMR access
+            es1SDK1.addTmrAccessAsync(tmrRecipient)
+
+            // Retrieve the TMR JWT
+            val yourCompanyDummyBackend = SSKSbackend(SSKS_URL, APP_ID, SSKS_BACKEND_APP_KEY)
+            val ssksPlugin =
+                SealdSSKSTmrPlugin(
+                    ssksURL = SSKS_URL,
+                    appId = APP_ID,
+                    instanceName = "SSKSTmr1",
+                    logLevel = -1,
+                )
+
+            val authSessionSave =
+                yourCompanyDummyBackend.challengeSend(
+                    user1AccountInfo.userId,
+                    tmrAuthFactor,
+                    createUser = true,
+                    forceAuth = false,
+                    // `fakeOtp` is only on the staging server, to force the challenge to be 'aaaaaaaa'. In production, you cannot use this.
+                    fakeOtp = true,
+                ).await()
+
+            val tmrJWT =
+                ssksPlugin.getFactorTokenAsync(
+                    authSessionSave.sessionId,
+                    authFactor = tmrAuthFactor,
+                    challenge = SSKS_TMR_CHALLENGE,
+                )
+
+            // Retrieve the encryption session using the JWT
+            val tmrES =
+                sdk2.retrieveEncryptionSessionByTmrAsync(
+                    tmrJWT.token,
+                    es1SDK1.sessionId,
+                    overEncryptionKey,
+                )
+            assert(tmrES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.VIA_TMR_ACCESS)
+
+            // Convert the TMR accesses
+            val conversionResult =
+                sdk2.convertTmrAccessesAsync(
+                    tmrJWT.token,
+                    overEncryptionKey,
+                )
+            assert(conversionResult.status == "ok")
+
+            // After conversion, sdk2 can retrieve the encryption session directly.
+            val classicES = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, false)
+            assert(classicES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
+
             // Create proxy sessions
             val proxySession1 =
                 sdk1.createEncryptionSessionAsync(
@@ -273,7 +321,9 @@ class MainActivity : AppCompatActivity() {
                 assertFails {
                     sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false, lookupGroupKey = false)
                 } as SealdException
-            assert(exception.status == 404)
+            assert(exception.code == "NO_TOKEN_FOR_YOU")
+            assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
+            assert(exception.description == "Can't decipher this session")
 
             // user3 can retrieve the encryptionSession from the encrypted message through the group.
             val es1SDK3FromGroup = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true, lookupGroupKey = true)
@@ -295,7 +345,9 @@ class MainActivity : AppCompatActivity() {
                 assertFails {
                     sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false, lookupGroupKey = true)
                 } as SealdException
-            assert(exception.status == 404)
+            assert(exception.code == "NO_TOKEN_FOR_YOU")
+            assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
+            assert(exception.description == "Can't decipher this session")
 
             // user3 can still retrieve the session via proxy.
             val es1SDK3FromProxy = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true, lookupProxyKey = true)
@@ -326,7 +378,9 @@ class MainActivity : AppCompatActivity() {
                 assertFails {
                     sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false, lookupProxyKey = true, lookupGroupKey = true)
                 } as SealdException
-            assert(exception.status == 404)
+            assert(exception.code == "NO_TOKEN_FOR_YOU")
+            assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
+            assert(exception.description == "Can't decipher this session")
 
             // user1 revokes all other recipients from the session
             val respRevokeOther = es1SDK1.revokeOthersAsync()
@@ -341,7 +395,9 @@ class MainActivity : AppCompatActivity() {
                 assertFails {
                     sdk2.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
                 } as SealdException
-            assert(exception.status == 404)
+            assert(exception.code == "NO_TOKEN_FOR_YOU")
+            assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
+            assert(exception.description == "Can't decipher this session")
 
             // user1 revokes all. It can no longer retrieve it.
             val respRevokeAll = es1SDK1.revokeAllAsync()
@@ -353,7 +409,9 @@ class MainActivity : AppCompatActivity() {
                 assertFails {
                     sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
                 } as SealdException
-            assert(exception.status == 404)
+            assert(exception.code == "NO_TOKEN_FOR_YOU")
+            assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
+            assert(exception.description == "Can't decipher this session")
 
             // Create additional data for user1
             val recipientAsync = arrayOf(RecipientWithRights(user1AccountInfo.userId, allRights))
@@ -461,6 +519,24 @@ class MainActivity : AppCompatActivity() {
             assert(anotherMessage == clearMessageSubdIdentity)
 
             sdk1.heartbeatAsync()
+
+            // Get and Check sigchain hash
+            val user1LastSigchainHash = sdk1.getSigchainHashAsync(user1AccountInfo.userId)
+            assert(user1LastSigchainHash.position == 2)
+            val user1FirstSigchainHash = sdk2.getSigchainHashAsync(user1AccountInfo.userId, 0)
+            assert(user1FirstSigchainHash.position == 0)
+            val lastHashCheck = sdk2.checkSigchainHashAsync(user1AccountInfo.userId, user1LastSigchainHash.sigchainHash)
+            assert(lastHashCheck.found)
+            assert(lastHashCheck.position == 2)
+            assert(lastHashCheck.lastPosition == 2)
+            val firstHashCheck = sdk1.checkSigchainHashAsync(user1AccountInfo.userId, user1FirstSigchainHash.sigchainHash)
+            assert(firstHashCheck.found)
+            assert(firstHashCheck.position == 0)
+            assert(firstHashCheck.lastPosition == 2)
+            val badPositionCheck = sdk2.checkSigchainHashAsync(user1AccountInfo.userId, user1FirstSigchainHash.sigchainHash, 1)
+            assert(badPositionCheck.found == false)
+            // For badPositionCheck, position cannot be asserted as it is not set when the hash is not found.
+            assert(badPositionCheck.lastPosition == 2)
 
             // close SDKs
             sdk1.close()
@@ -586,7 +662,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val rawTMRSymKey = randomByteArray(64)
 
-            val yourCompanyDummyBackend = SSKSbackend(SSKS_URL, SSKS_BACKEND_APP_ID, SSKS_BACKEND_APP_KEY)
+            val yourCompanyDummyBackend = SSKSbackend(SSKS_URL, APP_ID, SSKS_BACKEND_APP_KEY)
             val ssksPlugin =
                 SealdSSKSTmrPlugin(
                     ssksURL = SSKS_URL,
@@ -610,6 +686,8 @@ class MainActivity : AppCompatActivity() {
                     authFactor,
                     createUser = true,
                     forceAuth = false,
+                    // `fakeOtp` is only on the staging server, to force the challenge to be 'aaaaaaaa'. In production, you cannot use this.
+                    fakeOtp = true,
                 ).await()
             assertEquals(authSessionSave.mustAuthenticate, false)
 
@@ -630,6 +708,8 @@ class MainActivity : AppCompatActivity() {
                     authFactor,
                     createUser = true,
                     forceAuth = false,
+                    // `fakeOtp` is only on the staging server, to force the challenge to be 'aaaaaaaa'. In production, you cannot use this.
+                    fakeOtp = true,
                 ).await()
             assertEquals(authSessionRetrieve.mustAuthenticate, true)
 
@@ -665,6 +745,8 @@ class MainActivity : AppCompatActivity() {
                     authFactor,
                     createUser = false,
                     forceAuth = false,
+                    // `fakeOtp` is only on the staging server, to force the challenge to be 'aaaaaaaa'. In production, you cannot use this.
+                    fakeOtp = true,
                 ).await()
             assertEquals(authSessionRetrieve2.mustAuthenticate, true)
             val retrievedSecondKey =
@@ -691,6 +773,8 @@ class MainActivity : AppCompatActivity() {
                     authFactor,
                     createUser = false,
                     forceAuth = false,
+                    // `fakeOtp` is only on the staging server, to force the challenge to be 'aaaaaaaa'. In production, you cannot use this.
+                    fakeOtp = true,
                 ).await()
             assert(authSessionRetrieve3.mustAuthenticate)
             val inst2Retrieve =
