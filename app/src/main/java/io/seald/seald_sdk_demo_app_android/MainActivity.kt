@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
             // SDK
             val sdkResultView: TextView = findViewById(R.id.testSDK)
             withContext(Dispatchers.Main) { sdkResultView.text = "test SDK: Running..." }
-            val sdkResult = testSDK(jwtBuilder)
+            val sdkResult = testSealdSDK(jwtBuilder)
             withContext(Dispatchers.Main) {
                 sdkResultView.text = "test SDK: ${if (sdkResult) "success" else "error"}"
             }
@@ -76,7 +76,7 @@ class MainActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 ssksPasswordResultView.text = "test SSKS Password: Running..."
             }
-            val ssksPasswordResult = testSSKSPassword()
+            val ssksPasswordResult = testSealdSsksPassword()
             withContext(Dispatchers.Main) {
                 ssksPasswordResultView.text =
                     "test SSKS Password: ${if (ssksPasswordResult) "success" else "error"}"
@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
             // SSKS TMR
             val ssksTmrResultView: TextView = findViewById(R.id.testSsksTMR)
             withContext(Dispatchers.Main) { ssksTmrResultView.text = "test SSKS TMR: Running..." }
-            val ssksTmrResult = testSSKSTMR()
+            val ssksTmrResult = testSealdSsksTMR()
             withContext(Dispatchers.Main) {
                 ssksTmrResultView.text =
                     "test SSKS TMR: ${if (ssksTmrResult) "success" else "error"}"
@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun testSDK(jwtBuilder: JWTBuilder): Boolean {
+    private suspend fun testSealdSDK(jwtBuilder: JWTBuilder): Boolean {
         try {
             // The SealdSDK uses a local database. This database should be written to a permanent directory.
             // On android, the recommended path is returned by the kotlin getter `filesDir` (java: getFileDir())
@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
                     appId = APP_ID,
                     "$databasePath/sdk1",
                     databaseEncryptionKey,
-                    instanceName = "User1",
+                    instanceName = "Kt-Instance-1",
                     logLevel = -1,
                 )
             val sdk2 =
@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
                     appId = APP_ID,
                     "$databasePath/sdk2",
                     databaseEncryptionKey,
-                    instanceName = "User2",
+                    instanceName = "Kt-Instance-2",
                     logLevel = -1,
                 )
             val sdk3 =
@@ -135,7 +135,7 @@ class MainActivity : AppCompatActivity() {
                     appId = APP_ID,
                     "$databasePath/sdk3",
                     databaseEncryptionKey,
-                    instanceName = "User3",
+                    instanceName = "Kt-Instance-3",
                     logLevel = -1,
                 )
 
@@ -147,20 +147,20 @@ class MainActivity : AppCompatActivity() {
             val sdk1Deferred =
                 CoroutineScope(
                     Dispatchers.Default,
-                ).async { sdk1.createAccountAsync(jwtBuilder.signupJWT(), "User1", "deviceNameUser1") }
+                ).async { sdk1.createAccountAsync(jwtBuilder.signupJWT(), "Kt-demo-user-1", "Kt-demo-device-1") }
             val sdk2Deferred =
                 CoroutineScope(
                     Dispatchers.Default,
-                ).async { sdk2.createAccountAsync(jwtBuilder.signupJWT(), "User2", "deviceNameUser2") }
+                ).async { sdk2.createAccountAsync(jwtBuilder.signupJWT(), "Kt-demo-user-2", "Kt-demo-device-2") }
             val sdk3Deferred =
                 CoroutineScope(
                     Dispatchers.Default,
-                ).async { sdk3.createAccountAsync(jwtBuilder.signupJWT(), "User3", "deviceNameUser3") }
+                ).async { sdk3.createAccountAsync(jwtBuilder.signupJWT(), "Kt-demo-user-3", "Kt-demo-device-3") }
             val user1AccountInfo = sdk1Deferred.await()
             val user2AccountInfo = sdk2Deferred.await()
             val user3AccountInfo = sdk3Deferred.await()
 
-            // retrieve info about current user:
+            // retrieve info about current user after creating a user should return account info:
             val retrieveAccountInfo = sdk1.getCurrentAccountInfoAsync()
             assert(retrieveAccountInfo != null)
             assert(retrieveAccountInfo?.userId == user1AccountInfo.userId)
@@ -173,7 +173,7 @@ class MainActivity : AppCompatActivity() {
             val groupId = sdk1.createGroupAsync(groupName, groupMembers, groupAdmins)
 
             // Manage group members and admins
-            // Add user2 as group member
+            // user1 add user2 as group member
             sdk1.addGroupMembersAsync(groupId, arrayOf(user2AccountInfo.userId))
             // user1 add user3 as group member and group admin
             sdk1.addGroupMembersAsync(groupId, arrayOf(user3AccountInfo.userId), arrayOf(user3AccountInfo.userId))
@@ -192,7 +192,7 @@ class MainActivity : AppCompatActivity() {
                     RecipientWithRights(user2AccountInfo.userId),
                     RecipientWithRights(groupId),
                 )
-            val es1SDK1 = sdk1.createEncryptionSessionAsync(recipients)
+            val es1SDK1 = sdk1.createEncryptionSessionAsync(recipients, useCache = false)
             assert(es1SDK1.retrievalDetails.flow == EncryptionSessionRetrievalFlow.CREATED)
 
             // Using two-man-rule accesses
@@ -220,22 +220,23 @@ class MainActivity : AppCompatActivity() {
                     logLevel = -1,
                 )
 
-            // The app backend creates an SSKS authentication session to save the identity.
-            // This is the first time that this email is storing an identity, so `mustAuthenticate` is false.
-            val authSessionSave =
+            // The app backend creates an SSKS authentication session.
+            // This is the first time that this email is authenticating onto SSKS, so `mustAuthenticate` would be false, but we force auth because we want to convert TMR Accesses.
+            val authSession =
                 yourCompanyDummyBackend.challengeSend(
                     user1AccountInfo.userId,
                     tmrAuthFactor,
                     createUser = true,
-                    forceAuth = false,
+                    forceAuth = true,
                     // `fakeOtp` is only on the staging server, to force the challenge to be 'aaaaaaaa'. In production, you cannot use this.
                     fakeOtp = true,
                 ).await()
+            assertEquals(authSession.mustAuthenticate, true)
 
             // Retrieve a JWT associated with the authentication factor from SSKS
             val tmrJWT =
                 ssksPlugin.getFactorTokenAsync(
-                    authSessionSave.sessionId,
+                    authSession.sessionId,
                     authFactor = tmrAuthFactor,
                     challenge = SSKS_TMR_CHALLENGE,
                 )
@@ -246,6 +247,7 @@ class MainActivity : AppCompatActivity() {
                     tmrJWT.token,
                     es1SDK1.sessionId,
                     overEncryptionKey,
+                    useCache = false,
                 )
             assert(tmrES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.VIA_TMR_ACCESS)
 
@@ -258,10 +260,11 @@ class MainActivity : AppCompatActivity() {
             assert(conversionResult.status == "ok")
 
             // After conversion, sdk2 can retrieve the encryption session directly.
-            val classicES = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, false)
+            val classicES = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, useCache = false)
             assert(classicES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
 
             // Using proxy sessions: https://docs.seald.io/sdk/guides/proxy-sessions.html
+
             // Create proxy sessions: user1 needs to be a recipient of this session in order
             // to be able to add it as a proxy session
             val proxySession1 =
@@ -290,11 +293,13 @@ class MainActivity : AppCompatActivity() {
             assert(initialString == decryptedMessage)
 
             // user1 can parse/retrieve the EncryptionSession from the encrypted message
-            val es1SDK1FromMessageId = parseSessionIdFromMessage(encryptedMessage)
-            assert(es1SDK1FromMessageId == es1SDK1.sessionId)
-            val es1SDK1FromMessage = sdk1.retrieveEncryptionSessionFromMessage(encryptedMessage)
-            assert(es1SDK1FromMessage.sessionId == es1SDK1.sessionId)
-            assert(es1SDK1FromMessage.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
+            val es1SDK1FromMessId = parseSessionIdFromMessage(encryptedMessage)
+            assert(es1SDK1FromMessId == es1SDK1.sessionId)
+            val es1SDK1FromMess = sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false)
+            assert(es1SDK1FromMess.sessionId == es1SDK1.sessionId)
+            assert(es1SDK1FromMess.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
+            val decryptedMessageFromMess = es1SDK1FromMess.decryptMessageAsync(encryptedMessage)
+            assert(initialString == decryptedMessageFromMess)
 
             // Create a test file on disk that we will encrypt/decrypt
             val filename = "testfile.txt"
@@ -302,13 +307,13 @@ class MainActivity : AppCompatActivity() {
             val clearFile = File(getFilesDir(), "/$filename")
             clearFile.writeText(fileContent)
 
-            // encrypt the test file. Resulting file will be written alongside the source file, with `.seald` extension added
+            // Encrypt the test file. Resulting file will be written alongside the source file, with `.seald` extension added
             val encryptedFileURI = es1SDK1.encryptFileFromURIAsync(clearFile.absolutePath)
 
-            // user1 can retrieve the encryptionSession directly from the encrypted file
+            // user1 can parse/retrieve the encryptionSession directly from the encrypted file
             val es1SDK1FromFileId = parseSessionIdFromFile(encryptedFileURI)
             assert(es1SDK1FromFileId == es1SDK1.sessionId)
-            val es1SDK1FromFile = sdk1.retrieveEncryptionSessionFromFileAsync(encryptedFileURI)
+            val es1SDK1FromFile = sdk1.retrieveEncryptionSessionFromFileAsync(encryptedFileURI, useCache = false)
             assert(es1SDK1FromFile.sessionId == es1SDK1.sessionId)
             assert(es1SDK1FromFile.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
 
@@ -325,7 +330,7 @@ class MainActivity : AppCompatActivity() {
             val fileBytes = file.readBytes()
             val es1SDK1FromByteId = parseSessionIdFromBytes(fileBytes)
             assert(es1SDK1FromByteId == es1SDK1.sessionId)
-            val es1SDK1FromByte = sdk1.retrieveEncryptionSessionFromBytesAsync(fileBytes)
+            val es1SDK1FromByte = sdk1.retrieveEncryptionSessionFromBytesAsync(fileBytes, useCache = false)
             assert(es1SDK1FromByte.sessionId == es1SDK1.sessionId)
             assert(es1SDK1FromByte.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
             val decryptedFile2URI = es1SDK1FromByte.decryptFileFromURIAsync(encryptedFileURI)
@@ -333,17 +338,8 @@ class MainActivity : AppCompatActivity() {
             val decryptedFile2 = File(decryptedFile2URI)
             assert(fileContent == decryptedFile2.readText())
 
-            // user1 can retrieve the EncryptionSession from the encrypted message
-            val es1SDK1FromMessId = parseSessionIdFromMessage(encryptedMessage)
-            assert(es1SDK1FromMessId == es1SDK1.sessionId)
-            val es1SDK1FromMess = sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true)
-            assert(es1SDK1FromMess.sessionId == es1SDK1.sessionId)
-            assert(es1SDK1FromMess.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
-            val decryptedMessageFromMess = es1SDK1FromMess.decryptMessageAsync(encryptedMessage)
-            assert(initialString == decryptedMessageFromMess)
-
             // user2 can retrieve the encryptionSession from the session ID.
-            val es1SDK2 = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, true)
+            val es1SDK2 = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, useCache = false)
             assert(es1SDK2.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
             val decryptedMessageSDK2 = es1SDK2.decryptMessageAsync(encryptedMessage)
             assert(initialString == decryptedMessageSDK2)
@@ -351,14 +347,14 @@ class MainActivity : AppCompatActivity() {
             // user3 cannot retrieve the SealdEncryptionSession with lookupGroupKey set to false.
             var exception =
                 assertFails {
-                    sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false, lookupGroupKey = false)
+                    sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false, lookupGroupKey = false)
                 } as SealdException
             assert(exception.code == "NO_TOKEN_FOR_YOU")
             assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
             assert(exception.description == "Can't decipher this session")
 
             // user3 can retrieve the encryptionSession from the encrypted message through the group.
-            val es1SDK3FromGroup = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true, lookupGroupKey = true)
+            val es1SDK3FromGroup = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false, lookupGroupKey = true)
             assert(es1SDK3FromGroup.retrievalDetails.flow == EncryptionSessionRetrievalFlow.VIA_GROUP)
             assert(es1SDK3FromGroup.retrievalDetails.groupId == groupId)
             val decryptedMessageSDK3 = es1SDK3FromGroup.decryptMessageAsync(encryptedMessage)
@@ -375,14 +371,14 @@ class MainActivity : AppCompatActivity() {
             // user3 still has the encryption session in its cache, but we can disable it.
             exception =
                 assertFails {
-                    sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false, lookupGroupKey = true)
+                    sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false, lookupGroupKey = true)
                 } as SealdException
             assert(exception.code == "NO_TOKEN_FOR_YOU")
             assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
             assert(exception.description == "Can't decipher this session")
 
             // user3 can still retrieve the session via proxy.
-            val es1SDK3FromProxy = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, true, lookupProxyKey = true)
+            val es1SDK3FromProxy = sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false, lookupProxyKey = true)
             assert(es1SDK3FromProxy.retrievalDetails.flow == EncryptionSessionRetrievalFlow.VIA_PROXY)
             assert(es1SDK3FromProxy.retrievalDetails.proxySessionId == proxySession1.sessionId)
 
@@ -393,7 +389,13 @@ class MainActivity : AppCompatActivity() {
             assert(respAdd[user3AccountInfo.deviceId]!!.success) // Note that addRecipient return deviceId
 
             // user3 can now retrieve it without group or proxy.
-            val es1SDK3 = sdk3.retrieveEncryptionSessionAsync(es1SDK1.sessionId, false, lookupGroupKey = false, lookupProxyKey = false)
+            val es1SDK3 =
+                sdk3.retrieveEncryptionSessionAsync(
+                    es1SDK1.sessionId,
+                    useCache = false,
+                    lookupGroupKey = false,
+                    lookupProxyKey = false,
+                )
             assert(es1SDK3.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
             val decryptedMessageAfterAdd = es1SDK3.decryptMessageAsync(encryptedMessage)
             assert(initialString == decryptedMessageAfterAdd)
@@ -408,7 +410,12 @@ class MainActivity : AppCompatActivity() {
             // user3 cannot retrieve the session anymore, even with proxy or group
             exception =
                 assertFails {
-                    sdk3.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false, lookupProxyKey = true, lookupGroupKey = true)
+                    sdk3.retrieveEncryptionSessionFromMessageAsync(
+                        encryptedMessage,
+                        useCache = false,
+                        lookupProxyKey = true,
+                        lookupGroupKey = true,
+                    )
                 } as SealdException
             assert(exception.code == "NO_TOKEN_FOR_YOU")
             assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
@@ -425,7 +432,7 @@ class MainActivity : AppCompatActivity() {
             // user2 cannot retrieve the session anymore
             exception =
                 assertFails {
-                    sdk2.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
+                    sdk2.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false)
                 } as SealdException
             assert(exception.code == "NO_TOKEN_FOR_YOU")
             assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
@@ -440,7 +447,7 @@ class MainActivity : AppCompatActivity() {
             // user1 cannot retrieve anymore
             exception =
                 assertFails {
-                    sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, false)
+                    sdk1.retrieveEncryptionSessionFromMessageAsync(encryptedMessage, useCache = false)
                 } as SealdException
             assert(exception.code == "NO_TOKEN_FOR_YOU")
             assert(exception.id == "GOSDK_NO_TOKEN_FOR_YOU")
@@ -458,6 +465,7 @@ class MainActivity : AppCompatActivity() {
             val encryptionSessions =
                 sdk1.retrieveMultipleEncryptionSessionsAsync(
                     arrayOf(es2SDK1.sessionId, es3SDK1.sessionId, es4SDK1.sessionId),
+                    useCache = false,
                 )
             assert(encryptionSessions.size == 3)
             assert(encryptionSessions[0].sessionId == es2SDK1.sessionId)
@@ -469,7 +477,7 @@ class MainActivity : AppCompatActivity() {
             // `preparedRenewal` Can be stored on SSKS as a new identity. That way, a backup will be available is the renewKeys fail.
 
             sdk1.renewKeysAsync(preparedRenewal = preparedRenewal)
-            val es2SDK1AfterRenew = sdk1.retrieveEncryptionSessionAsync(es2SDK1.sessionId, false)
+            val es2SDK1AfterRenew = sdk1.retrieveEncryptionSessionAsync(es2SDK1.sessionId, useCache = false)
             val decryptedMessageAfterRenew = es2SDK1AfterRenew.decryptMessageAsync(secondEncryptedMessage)
             assert(anotherMessage == decryptedMessageAfterRenew)
 
@@ -533,13 +541,13 @@ class MainActivity : AppCompatActivity() {
                     appId = APP_ID,
                     "$databasePath/sdk1Exported",
                     databaseEncryptionKey,
-                    instanceName = "sdk1",
+                    instanceName = "sdk1Exported",
                     logLevel = -1,
                 )
             sdk1Exported.importIdentityAsync(exportIdentity)
 
             // SDK with imported identity can decrypt
-            val es2SDK1Exported = sdk1Exported.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage)
+            val es2SDK1Exported = sdk1Exported.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage, useCache = false)
             val clearMessageExportedIdentity = es2SDK1Exported.decryptMessageAsync(secondEncryptedMessage)
             assert(anotherMessage == clearMessageExportedIdentity)
 
@@ -556,13 +564,13 @@ class MainActivity : AppCompatActivity() {
                     appId = APP_ID,
                     "$databasePath/sdk1SubDevice",
                     databaseEncryptionKey,
-                    instanceName = "sdk1",
+                    instanceName = "sdk1SubDevice",
                     logLevel = -1,
                 )
             sdk1SubDevice.importIdentityAsync(subIdentity.backupKey)
 
             // sub device can decrypt
-            val es2SDK1SubDevice = sdk1SubDevice.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage, false)
+            val es2SDK1SubDevice = sdk1SubDevice.retrieveEncryptionSessionFromMessageAsync(secondEncryptedMessage, useCache = false)
 
             val clearMessageSubdIdentity = es2SDK1SubDevice.decryptMessageAsync(secondEncryptedMessage)
             assert(anotherMessage == clearMessageSubdIdentity)
@@ -611,7 +619,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun testSSKSPassword(): Boolean {
+    private suspend fun testSealdSsksPassword(): Boolean {
         try {
             // Simulating a Seald identity with random data, for a simpler example.
             val dummyIdentity = randomByteArray(10)
@@ -714,7 +722,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun testSSKSTMR(): Boolean {
+    private suspend fun testSealdSsksTMR(): Boolean {
         try {
             // rawTMRSymKey is a secret, generated and stored by your _backend_, unique for the user.
             // It can be retrieved by client-side when authenticated (usually as part of signup/sign-in call response).
@@ -742,7 +750,7 @@ class MainActivity : AppCompatActivity() {
             val userEM = "email-${randomString(15)}@test.com"
             val authFactor = AuthFactor(AuthFactorType.EM, userEM)
 
-            // At signup, your backend can creates a SSKS session to save the identity.
+            // The app backend creates an SSKS authentication session to save the identity.
             // This is the first time that this email is storing an identity, so the returned `must_authenticate` is false.
             val authSessionSave =
                 yourCompanyDummyBackend.challengeSend(

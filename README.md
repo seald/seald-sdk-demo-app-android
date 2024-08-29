@@ -6,11 +6,12 @@ You can check the reference documentation at <https://docs.seald.io/sdk/seald-sd
 
 The main file you could be interested in reading is [`./app/src/main/java/io/seald/seald_sdk_demo_app_android/MainActivity.kt`](./app/src/main/java/io/seald/seald_sdk_demo_app_android/MainActivity.kt).
 
-Also, it is recommended to create your own Seald team on <https://www.seald.io/create-sdk>,
-and change the values of `APP_ID`, `JWT_SHARED_SECRET_ID`, and `JWT_SHARED_SECRET`, that you can get on the `SDK` tab
-of the Seald dashboard settings, as well as `SSKS_BACKEND_APP_KEY` that you can get on the `SSKS` tab,
-in `./app/src/main/java/io/seald/seald_sdk_demo_app_android/Credentials.kt`,
-so that the example runs in your own Seald team.
+Also, to run the example app, you must copy `./app/src/main/java/io/seald/seald_sdk_demo_app_android/Credentials.kt_template` to `./app/src/main/java/io/seald/seald_sdk_demo_app_android/Credentials.kt`, and set
+the values of `API_URL`, `APP_ID`, `JWT_SHARED_SECRET_ID`, `JWT_SHARED_SECRET`, `SSKS_URL` and `SSKS_BACKEND_APP_KEY`.
+
+To get these values, you must create your own Seald team on <https://www.seald.io/create-sdk>. Then, you can get the
+values of `API_URL`, `APP_ID`, `JWT_SHARED_SECRET_ID`, and `JWT_SHARED_SECRET`, on the `SDK` tab of the Seald dashboard
+settings, and you can get `SSKS_URL` and `SSKS_BACKEND_APP_KEY` on the `SSKS` tab.
 
 Finally, to run from the CLI:
 
