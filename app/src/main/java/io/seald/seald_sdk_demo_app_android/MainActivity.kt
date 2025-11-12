@@ -282,6 +282,87 @@ class MainActivity : AppCompatActivity() {
             val classicES = sdk2.retrieveEncryptionSessionAsync(es1SDK1.sessionId, useCache = false)
             assert(classicES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
 
+            // Using SymEncKeys
+
+            // Create a session, add SymEncKeys, then retrieve the session using them.
+            // Create session
+            val esSymEncKeys =
+                sdk1.createEncryptionSessionAsync(
+                    arrayOf(RecipientWithRights(user1AccountInfo.userId)),
+                    metadata = "test-android-sessionSymEncKeys",
+                    useCache = false,
+                )
+
+            // Create a SymEncKey with Password
+            val symEncKeyPassword = randomString(16)
+            val symEncKeyFromPassword = esSymEncKeys.addSymEncKeyFromPasswordAsync(symEncKeyPassword)
+            assert(symEncKeyFromPassword.length == 36)
+
+            // Create a SymEncKey with raw keys
+            val symEncKeySecret = randomString(16)
+            // WARNING: This MUST be a cryptographically random buffer of 64 bytes.
+            val symEncKeyRawKey = randomByteArray(64)
+            val symEncKeyFromRawKeys = esSymEncKeys.addSymEncKeyFromRawKeysAsync(symEncKeySecret, symEncKeyRawKey)
+            assert(symEncKeyFromRawKeys.length == 36)
+
+            // Retrieve the encryption session using the SymEncKey with Password
+            val sekpES =
+                sdk2.retrieveEncryptionSessionWithSymEncKeyPasswordAsync(
+                    esSymEncKeys.sessionId,
+                    symEncKeyFromPassword,
+                    symEncKeyPassword,
+                    useCache = false,
+                )
+            assert(sekpES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.VIA_SYM_ENC_KEY)
+
+            // Retrieve the encryption session using the SymEncKey with raw keys
+            val sekrES =
+                sdk3.retrieveEncryptionSessionWithSymEncKeyRawKeysAsync(
+                    esSymEncKeys.sessionId,
+                    symEncKeyFromRawKeys,
+                    symEncKeySecret,
+                    symEncKeyRawKey,
+                    useCache = false,
+                )
+            assert(sekrES.retrievalDetails.flow == EncryptionSessionRetrievalFlow.VIA_SYM_ENC_KEY)
+
+            // Self-add using the SymEncKey with Password
+            sdk2.selfAddToEncryptionSessionWithSymEncKeyPasswordAsync(
+                esSymEncKeys.sessionId,
+                symEncKeyFromPassword,
+                symEncKeyPassword,
+                useCache = false,
+            )
+
+            // After conversion, sdk2 can retrieve the encryption session directly.
+            val classicESfromSymEncKeyPassword =
+                sdk2.retrieveEncryptionSessionAsync(
+                    esSymEncKeys.sessionId,
+                    useCache = false,
+                    lookupProxyKey = false,
+                    lookupGroupKey = false,
+                )
+            assert(classicESfromSymEncKeyPassword.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
+
+            // Self-add using the SymEncKey with Raw Keys
+            sdk3.selfAddToEncryptionSessionWithSymEncKeyRawKeysAsync(
+                esSymEncKeys.sessionId,
+                symEncKeyFromRawKeys,
+                symEncKeySecret,
+                symEncKeyRawKey,
+                useCache = false,
+            )
+
+            // After conversion, sdk3 can retrieve the encryption session directly.
+            val classicESfromSymEncKeyRawKeys =
+                sdk3.retrieveEncryptionSessionAsync(
+                    esSymEncKeys.sessionId,
+                    useCache = false,
+                    lookupProxyKey = false,
+                    lookupGroupKey = false,
+                )
+            assert(classicESfromSymEncKeyRawKeys.retrievalDetails.flow == EncryptionSessionRetrievalFlow.DIRECT)
+
             // Using proxy sessions: https://docs.seald.io/sdk/guides/proxy-sessions.html
 
             // Create proxy sessions: user1 needs to be a recipient of this session in order
@@ -1079,6 +1160,55 @@ class MainActivity : AppCompatActivity() {
                 ) // Retrieve the encryption session using the JWT
             val decryptedMessageTMRES = tmrES.decryptMessageAsync(encryptedMessage) // TMR-retrieved session can decrypt the message
             assert(initialString == decryptedMessageTMRES)
+
+            // Using SymEncKeys
+
+            // Add SymEncKeys, then retrieve the session using them.
+            // Create session
+            val esSymEncKeys =
+                sdkClassicUser.createEncryptionSessionAsync(
+                    arrayOf(RecipientWithRights(sdkClassicUserInfo.userId)),
+                    metadata = "anonymous-kotlin-sessionSymEncKeys",
+                    useCache = false,
+                )
+            val encryptedMessageSymEncKey = esSymEncKeys.encryptMessageAsync(initialString)
+
+            // Create a SymEncKey with Password
+            val symEncKeyPassword = randomString(16)
+            val symEncKeyFromPassword = esSymEncKeys.addSymEncKeyFromPasswordAsync(symEncKeyPassword)
+            assert(symEncKeyFromPassword.length == 36)
+
+            // Create a SymEncKey with raw keys
+            val symEncKeySecret = randomString(16)
+            // WARNING: This MUST be a cryptographically random buffer of 64 bytes.
+            val symEncKeyRawKey = randomByteArray(64)
+            val symEncKeyFromRawKeys = esSymEncKeys.addSymEncKeyFromRawKeysAsync(symEncKeySecret, symEncKeyRawKey)
+            assert(symEncKeyFromRawKeys.length == 36)
+
+            // Retrieve the encryption session using the SymEncKey with Password
+            val retrieveJwtPassword = jwtBuilder.anonymousRetrieveSessionJWT(symEncKeyFromPassword)
+            val sekpES =
+                anonymousSDK.retrieveAnonymousEncryptionSessionWithSymEncKeyPasswordAsync(
+                    retrieveJwtPassword,
+                    esSymEncKeys.sessionId,
+                    symEncKeyFromPassword,
+                    symEncKeyPassword,
+                )
+            val decryptedFromPassword = sekpES.decryptMessageAsync(encryptedMessageSymEncKey)
+            assert(decryptedFromPassword == initialString)
+
+            // Retrieve the encryption session using the SymEncKey with raw keys
+            val retrieveJwtRawKeys = jwtBuilder.anonymousRetrieveSessionJWT(symEncKeyFromRawKeys)
+            val sekrES =
+                anonymousSDK.retrieveAnonymousEncryptionSessionWithSymEncKeyRawKeysAsync(
+                    retrieveJwtRawKeys,
+                    esSymEncKeys.sessionId,
+                    symEncKeyFromRawKeys,
+                    symEncKeySecret,
+                    symEncKeyRawKey,
+                )
+            val decryptedFromRawKeys = sekrES.decryptMessageAsync(encryptedMessageSymEncKey)
+            assert(decryptedFromRawKeys == initialString)
 
             // Serialize / Deserialize session
             val serializedSession = anonymousSession.serialize() // serialize

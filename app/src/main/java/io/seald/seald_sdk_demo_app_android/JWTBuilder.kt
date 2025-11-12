@@ -28,6 +28,7 @@ class JWTBuilder(
         ANONYMOUS_FIND_SIGCHAIN(2),
         JOIN_TEAM(3),
         ADD_CONNECTOR(4),
+        ANONYMOUS_RETRIEVE_SESSION(5),
     }
 
     fun signupJWT(): String {
@@ -39,7 +40,7 @@ class JWTBuilder(
             .setHeaderParam("alg", "HS256")
             .setHeaderParam("typ", "JWT")
             .claim("join_team", true)
-            .claim("scopes", JWTPermission.JOIN_TEAM)
+            .claim("scopes", arrayOf(JWTPermission.JOIN_TEAM.perm))
             .setId(UUID.randomUUID().toString())
             .setIssuer(jwtSharedSecretId)
             .setIssuedAt(date)
@@ -59,7 +60,7 @@ class JWTBuilder(
             .builder()
             .setHeaderParam("alg", "HS256")
             .setHeaderParam("typ", "JWT")
-            .claim("scopes", JWTPermission.ADD_CONNECTOR)
+            .claim("scopes", arrayOf(JWTPermission.ADD_CONNECTOR.perm))
             .claim("connector_add", mapOf("type" to "AP", "value" to "$customUserId@$appId"))
             .setIssuer(jwtSharedSecretId)
             .setId(UUID.randomUUID().toString())
@@ -79,7 +80,7 @@ class JWTBuilder(
             .setHeaderParam("alg", "HS256")
             .setHeaderParam("typ", "JWT")
             .claim("recipients", recipients)
-            .claim("scopes", JWTPermission.ANONYMOUS_FIND_KEY)
+            .claim("scopes", arrayOf(JWTPermission.ANONYMOUS_FIND_KEY.perm))
             .setIssuer(jwtSharedSecretId)
             .setIssuedAt(date)
             .setExpiration(expiryDate)
@@ -111,7 +112,25 @@ class JWTBuilder(
                     )
                 },
             ).claim("owner", ownerId)
-            .claim("scopes", JWTPermission.ANONYMOUS_CREATE_MESSAGE)
+            .claim("scopes", arrayOf(JWTPermission.ANONYMOUS_CREATE_MESSAGE.perm))
+            .setId(UUID.randomUUID().toString())
+            .setIssuer(jwtSharedSecretId)
+            .setIssuedAt(date)
+            .setExpiration(expiryDate)
+            .signWith(jwtSharedSecret, SignatureAlgorithm.HS256)
+            .compact()
+    }
+
+    fun anonymousRetrieveSessionJWT(symEncKeyId: String): String {
+        val date = Date()
+        val expiryDate = Date(date.time + 2 * 60 * 60 * 1000)
+
+        return Jwts
+            .builder()
+            .setHeaderParam("alg", "HS256")
+            .setHeaderParam("typ", "JWT")
+            .claim("sym_enc_keys", arrayOf(symEncKeyId))
+            .claim("scopes", arrayOf(JWTPermission.ANONYMOUS_RETRIEVE_SESSION.perm))
             .setId(UUID.randomUUID().toString())
             .setIssuer(jwtSharedSecretId)
             .setIssuedAt(date)
